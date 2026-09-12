@@ -8,7 +8,19 @@ export const SCALES = {
   dorian: { name: 'Dorian', intervals: [0, 2, 3, 5, 7, 9, 10] },
   lydian: { name: 'Lydian', intervals: [0, 2, 4, 6, 7, 9, 11] },
   mixolydian: { name: 'Mixolydian', intervals: [0, 2, 4, 5, 7, 9, 10] },
-  hirajoshi: { name: '平調子', intervals: [0, 2, 3, 7, 8] },
+  phrygian: { name: 'Phrygian', intervals: [0, 1, 3, 5, 7, 8, 10] },
+  locrian: { name: 'Locrian', intervals: [0, 1, 3, 5, 6, 8, 10] },
+  harmonicMinor: { name: 'Harmonic minor', intervals: [0, 2, 3, 5, 7, 8, 11] },
+  melodicMinor: { name: 'Melodic minor', intervals: [0, 2, 3, 5, 7, 9, 11] },
+  harmonicMajor: { name: 'Harmonic major', intervals: [0, 2, 4, 5, 7, 8, 11] },
+  doubleHarmonic: { name: 'Double harmonic', intervals: [0, 1, 4, 5, 7, 8, 11] },
+  minorBlues: { name: 'Minor blues', intervals: [0, 3, 5, 6, 7, 10] },
+  majorBlues: { name: 'Major blues', intervals: [0, 2, 3, 4, 7, 9] },
+  wholeTone: { name: 'Whole tone', intervals: [0, 2, 4, 6, 8, 10] },
+  diminishedHW: { name: 'Diminished H-W', intervals: [0, 1, 3, 4, 6, 7, 9, 10] },
+  diminishedWH: { name: 'Diminished W-H', intervals: [0, 2, 3, 5, 6, 8, 9, 11] },
+  chromatic: { name: 'Chromatic', intervals: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] },
+  hirajoshi: { name: 'Hirajoshi', intervals: [0, 2, 3, 7, 8] },
 };
 export const PER_HAND = 14;
 export const STRING_COUNT = PER_HAND * 2;
@@ -59,4 +71,35 @@ export function bpmFromTaps(taps) {
   const gaps = taps.slice(1).map((time, i) => time - taps[i]).sort((a, b) => a - b);
   const gap = gaps[Math.floor(gaps.length / 2)];
   return clamp(Math.round(60000 / Math.max(gap, 1)), 40, 200);
+}
+
+// The white crown uses the same geometry for drawing and musical hit testing.
+export function innerRadius(id, geometry, time = 0, still = false) {
+  const breath = still ? 0 : Math.sin(time * .85 + id * .34) * .055;
+  return geometry.inner + (geometry.radius - geometry.inner) * (.49 + breath);
+}
+export function harmonicLayer(point, id, geometry, time = 0, still = false, previous = 0) {
+  if (id === null) return 0;
+  const distance = Math.hypot(point.x - geometry.cx, point.y - geometry.cy);
+  if (distance < geometry.inner || distance > geometry.radius + 28) return 0;
+  const tip = innerRadius(id, geometry, time, still);
+  const deep = geometry.inner + (tip - geometry.inner) * .46;
+  // A small hysteresis band keeps a resting thumb from chattering at a boundary.
+  if (previous === 2 && distance < deep + 3) return 2;
+  if (distance < deep - (previous < 2 ? 2 : 0)) return 2;
+  if (distance < tip + (previous > 0 ? 3 : -2)) return 1;
+  return 0;
+}
+export const harmonicOffsets = layer => layer >= 2 ? [7, 12] : layer === 1 ? [7] : [];
+export function randomPatch(current, random = Math.random) {
+  const different = (values, old) => {
+    const candidates = values.filter(value => value !== old);
+    return candidates[Math.floor(clamp(random(), 0, .999999) * candidates.length)];
+  };
+  return {
+    root: different(Array.from({length: 12}, (_, i) => i), current.root),
+    scale: different(Object.keys(SCALES), current.scale),
+    voice: different(['kalimba', 'glass', 'neon', 'velvet'], current.voice),
+    palette: different(['neon', 'aurora', 'ember'], current.palette),
+  };
 }

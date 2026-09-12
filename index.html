@@ -1,57 +1,61 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#090b18">
-  <meta name="description" content="花火の光を弾く、両手のネオン・カリンバ。キーとスケールを選び、和音、アルペジオ、ループでセッション。">
-  <title>HANABI — 光を弾く楽器</title>
+  <meta name="description" content="A two-handed light instrument with tuned strings, inner harmonics, scales and live looping.">
+  <title>HANABI</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <main id="instrument">
   <header>
-    <div class="brand"><h1>HANABI<span>光を弾く楽器</span></h1><span class="edition">CHROMATIC FIRE / 003</span></div>
-    <div class="header-actions"><button id="mute" aria-label="消音" aria-pressed="false">音 ON</button><button id="settingsOpen" aria-label="音と演奏の設定" aria-haspopup="dialog">調整 <span>＋</span></button></div>
+    <div class="brand"><h1>HANABI</h1></div>
+    <div class="header-actions">
+      <button id="randomize" aria-label="Randomize key, scale, voice and color" title="Randomize key, scale, voice and color"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><g fill="currentColor" stroke="none"><circle cx="8" cy="8" r="1.5"/><circle cx="16" cy="8" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="8" cy="16" r="1.5"/><circle cx="16" cy="16" r="1.5"/></g></svg></button>
+      <button id="mute" aria-label="Mute" aria-pressed="false">SOUND</button><button id="settingsOpen" aria-label="Settings" aria-haspopup="dialog">SETTINGS</button>
+    </div>
   </header>
-  <section class="tuning" aria-label="調律">
-    <label>KEY<select id="root" aria-label="キー"></select></label>
-    <label class="scale-select">SCALE<select id="scale" aria-label="スケール"></select></label>
-    <label>VOICE<select id="voice" aria-label="音色"><option value="kalimba">Kalimba</option><option value="glass">Glass</option><option value="neon">Neon FM</option><option value="velvet">Velvet</option></select></label>
+  <section class="tuning" aria-label="Tuning">
+    <label>KEY<select id="root" aria-label="Key"></select></label>
+    <label class="scale-select">SCALE<select id="scale" aria-label="Scale"></select></label>
+    <label>VOICE<select id="voice" aria-label="Voice"><option value="kalimba">Kalimba</option><option value="glass">Glass</option><option value="neon">Neon FM</option><option value="velvet">Velvet</option></select></label>
   </section>
-  <section class="stage" id="stage" aria-label="花火の楽器">
-    <div class="stage-note"><span id="keyReadout">C · MAJOR PENTATONIC</span><span id="noteReadout">28 STRINGS</span></div>
-    <canvas id="canvas" tabindex="0" aria-label="28本の光の弦。左右の線をなぞって演奏。左は低音、右は高音。キーボードはA S D F G H JとQ W E R T Y Uで演奏。"></canvas>
-    <div class="center-label" aria-hidden="true"><span id="centerNote">C</span><small id="centerState">PLUCK THE LIGHT</small></div>
-    <div class="hand-labels"><span>低音 <b>LEFT</b></span><span><b>RIGHT</b> 高音</span></div>
-    <p id="hint" role="status">光の線を、親指でなぞって。</p>
+  <section class="stage" id="stage" aria-label="Strings">
+    <div class="stage-note"><span id="keyReadout" class="sr-only"></span><span id="noteReadout"></span></div>
+    <canvas id="canvas" tabindex="0" aria-label="Swipe the strings. Left: bass. Right: treble. Move inward to add a fifth, then an octave. Keyboard: A S D F G H J and Q W E R T Y U. Hold Shift for a fifth, Alt for fifth and octave."></canvas>
+    <div class="center-label" aria-hidden="true"><span id="centerNote">C</span><small id="centerState"></small></div>
+    <p id="hint" class="sr-only" role="status"></p>
   </section>
   <footer>
-    <div class="modes" role="group" aria-label="奏法"><button class="selected" data-mode="pluck" aria-pressed="true">弾く <small>PLUCK</small></button><button data-mode="chord" aria-pressed="false">和音 <small>CHORD</small></button><button data-mode="arp" aria-pressed="false">波紋 <small>ARP</small></button></div>
+    <section class="main-mix" aria-label="Mix">
+      <label>ECHO <output id="echoValue">25</output><input id="echo" type="range" min="0" max="80" value="25"></label>
+      <label>HALL <output id="hallValue">35</output><input id="hall" type="range" min="0" max="80" value="35"></label>
+      <label>VOLUME <output id="volumeValue">65</output><input id="volume" type="range" min="0" max="100" value="65"></label>
+    </section>
+    <div class="modes" role="group" aria-label="Play mode"><button class="selected" data-mode="pluck" aria-pressed="true">PLUCK</button><button data-mode="chord" aria-pressed="false">CHORD</button><button data-mode="arp" aria-pressed="false">ARP</button></div>
     <div class="transport">
-      <button id="tap" aria-label="テンポをタップして設定"><span class="beat-dot" id="beatDot"></span>TAP</button>
-      <label class="tempo"><input id="bpm" type="number" min="40" max="200" value="92" inputmode="numeric" aria-label="テンポ BPM"><small>BPM</small></label>
-      <button id="loop" class="loop-button" aria-label="2小節ループを録音"><span id="loopIcon">●</span><span id="loopLabel">ループ録音</span></button>
-      <button id="clearLoop" aria-label="ループを消す" disabled>消去</button>
+      <button id="tap" aria-label="Tap tempo"><span class="beat-dot" id="beatDot"></span>TAP</button>
+      <label class="tempo"><input id="bpm" type="number" min="40" max="200" value="92" inputmode="numeric" aria-label="Tempo in BPM"><small>BPM</small></label>
+      <button id="loop" class="loop-button" aria-label="Record a two-bar loop"><span id="loopIcon">●</span><span id="loopLabel">REC</span></button>
+      <button id="clearLoop" aria-label="Clear loop" disabled>CLEAR</button>
     </div>
     <div class="loop-track" aria-hidden="true"><div id="loopProgress"></div></div>
-    <div class="footer-note"><span id="loopStatus" role="status">2小節を録って、重ねて弾く。</span><span>A4 = 440 Hz</span></div>
+    <div class="footer-note"><span id="loopStatus" role="status">2 BARS</span></div>
   </footer>
 </main>
 <dialog id="settings" aria-labelledby="settingsTitle">
-  <div class="sheet-header"><div><small>SHAPE YOUR SOUND</small><h2 id="settingsTitle">音と光を調える</h2></div><button id="settingsClose" aria-label="設定を閉じる">閉じる</button></div>
+  <div class="sheet-header"><h2 id="settingsTitle">Settings</h2><button id="settingsClose" aria-label="Close settings">CLOSE</button></div>
   <div class="settings-grid">
-    <label>オクターブ<select id="octave"><option value="-1">−1 / 低く</option value="0" selected>0 / 標準</option><option value="1">＋1 / 高く</option></select></label>
-    <label>花火の色<select id="palette"><option value="neon">Neon / 極彩</option><option value="aurora">Aurora / 青緑</option><option value="ember">Ember / 金紅</option></select></label>
-    <label>余韻 <output id="decayValue">55</output><input id="decay" type="range" min="0" max="100" value="55"></label>
-    <label>光の強さ <output id="glowValue">70</output><input id="glow" type="range" min="0" max="100" value="70"></label>
-    <label>ECHO <output id="echoValue">25</output><input id="echo" type="range" min="0" max="80" value="25"></label>
-    <label>HALL <output id="hallValue">35</output><input id="hall" type="range" min="0" max="80" value="35"></label>
-    <label>音量 <output id="volumeValue">65</output><input id="volume" type="range" min="0" max="100" value="65"></label>
-    <label>グルーヴ<select id="swing"><option value="0">Straight</option><option value="0.16">Swing / 軽く跳ねる</option><option value="0.3">Swing / 深く跳ねる</option></select></label>
+    <label>Octave<select id="octave"><option value="-1">−1</option><option value="0" selected>0</option><option value="1">＋1</option></select></label>
+    <label>Color<select id="palette"><option value="neon">Neon</option><option value="aurora">Aurora</option><option value="ember">Ember</option></select></label>
+    <label>Decay <output id="decayValue">55</output><input id="decay" type="range" min="0" max="100" value="55"></label>
+    <label>Glow <output id="glowValue">70</output><input id="glow" type="range" min="0" max="100" value="70"></label>
+    <label>Groove<select id="swing"><option value="0">Straight</option><option value="0.16">Light swing</option><option value="0.3">Deep swing</option></select></label>
   </div>
-  <div class="switches"><label><input id="metronome" type="checkbox"> メトロノーム</label><label><input id="showNotes" type="checkbox" checked> 弦の音名を表示</label><label><input id="calm" type="checkbox"> 光の動きを控える</label></div>
-  <div class="guide"><p><strong>線を弾く。</strong> 各線に一つの音。外側ほど明るい音になり、速くなぞるほど強く響きます。中心に指を戻すと、音を鳴らさずに移動できます。</p><p><strong>両手で紡ぐ。</strong> 「和音」は左手で3音、右手でメロディー。「波紋」は押さえた線からテンポに沿って音が巡ります。</p><p><strong>フレーズを残す。</strong> 録音を押して、最初の一音から2小節。自動で繰り返します。再び押すと一時停止。キー・スケールを変えるとループも一緒に移調します。</p><p>PC: A〜Jの7キーが低音、Q〜Uの7キーが高音。Spaceでループ操作、Escで全停止。スマホでは両手の親指で。</p></div>
+  <div class="switches"><label><input id="metronome" type="checkbox"> Metronome</label><label><input id="showNotes" type="checkbox" checked> Note labels</label><label><input id="calm" type="checkbox"> Reduced motion</label></div>
+  <div class="guide"><p><strong>Strings.</strong> Swipe to play. Left is lower, right is higher. Faster swipes play louder; the outer edge sounds brighter.</p><p><strong>Inner strings.</strong> Curl into the white crown to add a perfect fifth (+7 semitones). Move deeper to add an octave (+12) as well. The white tips breathe; their visible length is the harmonic boundary. The center is silent.</p><p><strong>Modes.</strong> CHORD adds left-hand harmony. ARP repeats held notes as arpeggios. Shift + a note key adds a fifth; Alt adds a fifth and an octave.</p><p><strong>Loop.</strong> Press REC, then play. Two bars repeat automatically. PAUSE keeps the phrase; CLEAR erases it. Key and scale changes transpose the loop, including inner harmonics.</p><p><strong>Dice.</strong> Randomizes key, scale, voice and color. Tempo, mix and your loop stay unchanged.</p><p><strong>Keys.</strong> A S D F G H J: bass. Q W E R T Y U: treble. Space: loop. Esc: stop.</p></div>
 </dialog>
 <script type="module" src="app.mjs"></script>
 </body>

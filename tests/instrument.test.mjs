@@ -64,8 +64,8 @@ function harness() {
   return { ...api, elements, document, modes, globalEvents,
     async flush() { await Promise.resolve(); await Promise.resolve(); },
     advance(seconds) { for (let time = 0; time < seconds; time += .025) { now += 25; api.audio.context?.advance(.025); api.schedule(); frame(now); } },
-    pointer(type, id, string) {
-      const a = music.angleForString(string), r = api.geometry.radius * .8;
+    pointer(type, id, string, fraction = .8) {
+      const a = music.angleForString(string), r = api.geometry.radius * fraction;
       elements.get('canvas').dispatch(type, { pointerId: id, clientX: api.geometry.cx + Math.cos(a) * r, clientY: api.geometry.cy + Math.sin(a) * r, timeStamp: now, pointerType: 'touch' });
     },
   };
@@ -102,7 +102,7 @@ test('two-bar loop records, repeats, transposes, pauses, resumes and clears', as
   h.advance(5.3); assert.equal(h.loop.state, 'playing'); assert.ok(h.audio.calls.length > 2);
   h.elements.get('root').value = '2'; h.elements.get('root').dispatch('change');
   const count = h.audio.calls.length; h.advance(5.4);
-  assert.ok(h.audio.calls.slice(count).some(call => call.midi === music.midiForString(2, 2, 'pentatonic')));
+  assert.ok(h.audio.calls.slice(count).some(call => call.midi === music.midiForString(2, 2, 'hirajoshi')));
   h.elements.get('loop').dispatch('click'); assert.equal(h.loop.state, 'paused'); const stopped = h.audio.calls.length;
   h.advance(2); assert.equal(h.audio.calls.length, stopped);
   h.elements.get('loop').dispatch('click'); h.advance(.5); assert.equal(h.loop.state, 'playing');
@@ -132,4 +132,56 @@ test('look-ahead scheduling does not cut off the final fraction of the recording
   assert.equal(h.loop.state, 'recording');
   h.pointer('pointerdown', 2, 20); assert.ok(h.loop.events.some(event => event.id === 20 && event.step === 31));
   h.audio.context.currentTime = end + .01; h.schedule(); assert.equal(h.loop.state, 'playing'); h.pause();
+});
+
+test('Hirajoshi is the actual initial tuning and UI selection', () => {
+  const h = harness(); assert.equal(h.config.scale, 'hirajoshi'); assert.equal(h.elements.get('scale').value, 'hirajoshi');
+});
+test('curling inward adds fifth then octave without retriggering the base note', async () => {
+  const h = harness(); h.config.calm = true;
+  h.pointer('pointerdown', 1, 3); await h.flush();
+  const base = h.audio.calls[0].midi;
+  h.pointer('pointermove', 1, 3, .55); assert.deepEqual(h.audio.calls.map(call => call.midi), [base, base + 7]);
+  h.pointer('pointermove', 1, 3, .27); assert.deepEqual(h.audio.calls.map(call => call.midi), [base, base + 7, base + 12]);
+  h.pointer('pointermove', 1, 3, .15); assert.equal(h.fingers.get(1).id, null); assert.equal(h.audio.calls.length, 3);
+  h.pause();
+});
+test('inner harmonics are separately recorded and preserve intervals after transposition', async () => {
+  const h = harness(); h.config.calm = true;
+  h.elements.get('loop').dispatch('click'); await h.flush();
+  h.pointer('pointerdown', 1, 4, .27); h.pointer('pointerup', 1, 4, .27);
+  assert.deepEqual(Array.from(h.loop.events, event => event.interval), [0,7,12]);
+  h.elements.get('root').value = '3'; h.elements.get('root').dispatch('change');
+  const count = h.audio.calls.length; h.advance(5.5);
+  const notes = h.audio.calls.slice(count).map(call => call.midi), base = music.midiForString(4, 3, 'hirajoshi');
+  for (const offset of [0,7,12]) assert.ok(notes.includes(base + offset));
+  h.pause();
+});
+test('dice updates all corresponding controls and preserves recorded loop and mix', async () => {
+  const h = harness(); h.elements.get('loop').dispatch('click'); await h.flush(); h.pointer('pointerdown', 1, 2);
+  const events = JSON.stringify(h.loop.events), bpm = h.config.bpm, volume = h.audio.settings.volume;
+  h.elements.get('randomize').dispatch('click');
+  assert.notEqual(h.config.scale, 'hirajoshi'); assert.notEqual(h.config.root, 0);
+  for (const key of ['root','scale','voice','palette']) assert.equal(h.elements.get(key).value, String(h.config[key]));
+  assert.equal(h.config.bpm, bpm); assert.equal(h.audio.settings.volume, volume); assert.equal(JSON.stringify(h.loop.events), events);
+  for (const id of ['echo','hall','volume']) { h.elements.get(id).value = '42'; h.elements.get(id).dispatch('input'); assert.equal(h.audio.settings[id], 42); }
+  h.pause();
+});
+test('interface is English-only and the three mix sliders live on the main surface', () => {
+  for (const file of ['index.html','app.mjs','audio.mjs','music.mjs']) {
+    const text = fs.readFileSync(new URL('../' + file, import.meta.url), 'utf8'); assert.equal(/[ぁ-んァ-ン一-龯]/u.test(text), false, file);
+  }
+  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const main = html.split('<dialog')[0];
+  for (const id of ['echo','hall','volume','randomize']) assert.ok(main.includes(`id="${id}"`));
+});
+test('breathing white tips add a harmonic when they reach a resting finger', async () => {
+  const h = harness(), id = 10;
+  const radius = h.geometry.inner + (h.geometry.radius - h.geometry.inner) * .49;
+  h.pointer('pointerdown', 1, id, radius / h.geometry.radius); await h.flush();
+  const base = music.midiForString(id, 0, 'hirajoshi');
+  assert.equal(h.audio.calls.length, 1);
+  h.advance(8); assert.ok(h.audio.calls.some(call => call.midi === base + 7));
+  h.pointer('pointerup', 1, id); const count = h.audio.calls.length; h.advance(8);
+  assert.equal(h.audio.calls.length, count); h.pause();
 });

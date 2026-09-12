@@ -1,67 +1,81 @@
-# HANABI — 光を弾く楽器
+# HANABI
 
-一つの花火を、両手で弾くネオン・カリンバ。28本の光の弦がそれぞれ音を持ち、スマートフォンの左右を親指でなぞると旋律が生まれます。画面を開いたときから花火はそこにあり、指を離しても消えません。
+A two-handed light instrument. Swipe 28 tuned strings, curl into a breathing white crown for additional harmonics, and build phrases with chords, arpeggios and a two-bar loop.
 
-## 演奏する
+## Play
 
-1. **KEY / SCALE / VOICE** でセッションの調と音色を選びます。初期設定は C Major pentatonic / Kalimba。どの線を弾いても選んだスケールの音になります。
-2. 左半分は低音、右半分は1オクターブ上の音域。両側とも下から上へ音が高くなります。光の先に音名が表示されます。
-3. 線に触れると一音。横切ると弦を順番に弾けます。外側ほど明るく、速いスワイプほど強い音。中心の円は音を鳴らさず指を移動できる空間です。
+- The default tuning is **C Hirajoshi**, with the Kalimba voice.
+- Each colored string has a fixed note in the selected scale. Each side rises in pitch from bottom to top; the right side is one octave above the left.
+- Swipe across strings to pluck them. Faster swipes play louder; the outer edge sounds brighter.
+- Curl inward into the **white strings** to add a perfect fifth (+7 semitones). Move deeper to add an octave (+12) as well. The inner tips slowly grow and shrink, and their visible length determines the harmonic boundary. Small dots mark the deeper octave boundary.
+- Moving inward on the same string adds only the new harmonic, without retriggering the base note. A breathing tip can also catch a resting finger. The center remains silent.
+- Added fifths are exact chromatic intervals, not scale-quantized notes; depending on the selected scale, they can add out-of-scale color.
 
-| 奏法 | 左手 | 右手 |
+| Mode | Left hand | Right hand |
 | --- | --- | --- |
-| 弾く / PLUCK | 一本ずつ音を弾く | 一本ずつ音を弾く |
-| 和音 / CHORD | スケール内の3音を少しずらして鳴らす | メロディーを弾く |
-| 波紋 / ARP | 押さえた線を起点に分散和音 | 押さえた線を起点に分散和音 |
+| PLUCK | Individual notes | Individual notes |
+| CHORD | Three scale tones | Individual notes |
+| ARP | Held-string arpeggio | Held-string arpeggio |
 
-高い位置の和音は同じ側の弦へ折り返します。和音の構成はスケールに応じて変わり、ペンタトニックでは7音音階の通常の三和音とは異なります。
+CHORD uses alternating scale degrees and folds at the upper boundary of each hand. Pentatonic chords therefore differ from conventional seven-note-scale triads. Inner harmonics can be added in every mode; ARP keeps them on the rhythmic grid.
 
-## セッションとループ
+## Main controls
 
-- **12キー / 8スケール**：Major pentatonic、Minor pentatonic、Major、Natural minor、Dorian、Lydian、Mixolydian、平調子。
-- **4音色**：木のアタックの Kalimba、澄んだ Glass、倍音が変化する Neon FM、柔らかな Velvet。
-- **40〜200 BPM**。数字を直接編集するか、TAPを何度か押してテンポを合わせます。調整画面にメトロノームと2段階のスウィングがあります。外部機器との自動同期機能はありません。
-- **2小節ループ**：ループ録音を押したあと、最初の一音から録音します。16分音符の位置にそろえて、2小節後に自動で繰り返します。「波紋」の分散和音も記録されます。
-- 再生中も自由に重ねて弾けます。再びボタンを押すと一時停止、その後は先頭から再生。録音待ち・録音中に押すとキャンセル。「消去」で新しいフレーズを録れます。
-- ループは弦の位置を覚えるため、キー・スケール・オクターブの変更に追従します。音色も切り替わります。ループはページ内のメモリに保持され、リロードすると消えます。
-- 録音中はテンポを固定します。再生中の変更は可能です。
+- **KEY / SCALE / VOICE** select the tuning and sound.
+- The **dice** changes key, scale, voice and color. It preserves tempo, octave, play mode, mix, recording state and existing loop notes. Each randomized setting differs from its previous value.
+- **ECHO / HALL / VOLUME** sit together in a single row on the main screen.
+- **TAP / BPM** set the tempo, from 40 to 200 BPM. There is no external clock synchronization.
+- **SOUND / MUTED** toggles the output.
 
-## 光と響き
+The settings panel contains octave, color, decay, glow, swing, metronome, note labels and reduced motion. Reduced motion freezes the white crown and disables decorative particles and string vibration.
 
-「調整」からオクターブ、余韻、ECHO、HALL、音量、光の強さを調節できます。色は **Neon / Aurora / Ember** の3系統。弾いた弦が振動し、光が外へ走ります。OSの「視差効果を減らす」相当の設定、または「光の動きを控える」で粒や振動を止められます。
+## Scales and voices
 
-## PCで試す
+20 scales: Hirajoshi, Major pentatonic, Minor pentatonic, Major, Natural minor, Dorian, Lydian, Mixolydian, Phrygian, Locrian, Harmonic minor, Melodic minor (ascending form), Harmonic major, Double harmonic, Minor blues, Major blues, Whole tone, Diminished H-W, Diminished W-H and Chromatic.
 
-演奏面をクリックまたはTabで選びます。
+Four synthesized voices: **Kalimba**, **Glass**, **Neon FM** and **Velvet**. Three color palettes: **Neon**, **Aurora** and **Ember**.
 
-- `A S D F G H J`：左側の低い7弦
-- `Q W E R T Y U`：右側の低い7弦
-- `Space`：ループ録音・一時停止・再生
-- `Esc`：全停止（調整画面を開いている場合は、先に調整画面を閉じます）
+## Loop
 
-マウスでのスワイプにも対応。スマートフォンは縦持ち・横持ちに対応するレイアウトです。
+Press **REC**, then play. The first note starts two bars of recording, quantized to sixteenth-note positions. Playback starts automatically. Arpeggios and inner fifth/octave layers are recorded too.
 
-## 起動・公開
+Play freely over the loop. **PAUSE** preserves the phrase; **PLAY** restarts it from the beginning; **CLEAR** erases it. Pressing the loop button while armed or recording cancels that recording. Tempo is locked during recording but can change during playback.
 
-ビルドや依存ライブラリのインストールは不要です。
+Loops store string positions and added intervals. Changing key, scale or octave transposes them, and changing voice changes their timbre. Loops are held in page memory only and are lost on reload.
+
+## Keyboard
+
+Focus the canvas with a click or Tab.
+
+- `A S D F G H J`: first seven left-hand strings.
+- `Q W E R T Y U`: first seven right-hand strings.
+- Hold `Shift` when playing a note for the fifth layer; hold `Alt` for fifth and octave.
+- `Space`: record, pause or resume the loop.
+- `Esc`: stop audio (closes settings first if the dialog is open).
+
+Mouse swipes and multi-touch are supported. Portrait and landscape layouts are included.
+
+## Run
+
+No build step or third-party dependencies.
 
 ```sh
 python3 -m http.server 8000
 ```
 
-`http://localhost:8000` を開きます。ES Modulesを使用するため、`index.html` のファイル直接起動ではなくHTTPサーバー経由で開いてください。GitHub Pagesは `main` / root を公開元に指定できます。
+Open `http://localhost:8000`. Use an HTTP server instead of opening `index.html` as a file because the application uses ES modules. For GitHub Pages, select `main` / root as the publishing source.
 
-音声は最初の演奏操作で開始。画面の非表示・ページ離脱・音声の割り込み時は音を停止し、録音中のフレーズを破棄します。完成済みループは一時停止して残します。次の操作で音声を再開できます。マイク・外部音源・外部通信は使いません。
+Audio starts on the first playing gesture. Hiding or leaving the page, or an audio interruption, stops audio and cancels an unfinished recording. Completed loops are paused and retained. A new gesture unlocks audio again. No microphone, external samples or external services are used.
 
-## 開発・検証
+## Development
 
-- `music.mjs`：調律、弦のヒット判定、スワイプ補間、和音、ループの量子化。
-- `audio.mjs`：Web Audioによる発音とエフェクト。最大32声に制限し、音量とエンベロープを制御。
-- `app.mjs`：マルチタッチ、音声クロックを基準にした先読みスケジューラー、ループ、Canvas描画。
-- `style.css` / `index.html`：楽器画面と調整画面。
+- `music.mjs`: scales, tuning, hit testing, swipe interpolation, inner geometry, random patches and loop quantization.
+- `audio.mjs`: Web Audio synthesis and effects, capped at 32 active voices.
+- `app.mjs`: multi-touch, audio-clock scheduling, loops and Canvas rendering.
+- `index.html` / `style.css`: performance surface and settings.
 
 ```sh
 node --test tests/*.test.mjs
 ```
 
-Nodeの標準テストで全調律、弦位置、速いスワイプ、両手入力、和音、アルペジオ、ループの録音・移調・停止・再開、録音の終端、音声の停止・再開、発音数の上限を検証します。DOMとAudioContextは模擬環境です。実機のSafariでの操作感・音質・遅延は別途確認が必要です。
+The tests cover every tuning, string targeting, fast swipes, multi-touch, chords, arpeggios, loop transitions and transposition, recording boundaries, audio lifecycle, voice limits, the inner harmonic layers, randomization and English-only UI. DOM and AudioContext are mocked. Actual iPhone Safari sound, latency, layout and touch feel still require device testing.

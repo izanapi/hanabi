@@ -1,11 +1,11 @@
-import { NOTES, SCALES, PER_HAND, STRING_COUNT, LOOP_STEPS, clamp, midiForString, noteName, angleForString, stringAt, crossedStrings, chordStrings, stepSeconds, loopStep, bpmFromTaps } from './music.mjs';
+import { NOTES, SCALES, PER_HAND, STRING_COUNT, LOOP_STEPS, clamp, midiForString, noteName, angleForString, stringAt, crossedStrings, chordStrings, stepSeconds, loopStep, bpmFromTaps, innerRadius, harmonicLayer, harmonicOffsets, randomPatch } from './music.mjs';
 import { InstrumentAudio } from './audio.mjs';
 
 const $ = id => document.getElementById(id);
 const canvas = $('canvas'), ctx = canvas.getContext('2d'), audio = new InstrumentAudio();
-const config = { root: 0, scale: 'pentatonic', voice: 'kalimba', octave: 0, mode: 'pluck', palette: 'neon', bpm: 92, swing: 0, glow: 70, showNotes: true, calm: false, metronome: false };
+const config = { root: 0, scale: 'hirajoshi', voice: 'kalimba', octave: 0, mode: 'pluck', palette: 'neon', bpm: 92, swing: 0, glow: 70, showNotes: true, calm: false, metronome: false };
 const fingers = new Map(), pressedKeys = new Set(), pulses = [], particles = [], visualQueue = [];
-const strings = Array.from({ length: STRING_COUNT }, (_, id) => ({ id, angle: angleForString(id), energy: 0, last: -10 }));
+const strings = Array.from({ length: STRING_COUNT }, (_, id) => ({ id, angle: angleForString(id), energy: 0, innerEnergy: 0, last: -10 }));
 const clock = { timer: null, step: 0, next: 0 };
 const loop = { state: 'empty', events: [], startStep: 0, startTime: 0, visibleStep: 0 };
 let geometry = { width: 0, height: 0, cx: 0, cy: 0, radius: 0, inner: 34 };
@@ -18,6 +18,7 @@ const selectOptions = (element, options) => {
 };
 selectOptions($('root'), NOTES.map((name, i) => [i, name]));
 selectOptions($('scale'), Object.entries(SCALES).map(([key, scale]) => [key, scale.name]));
+$('scale').value = config.scale;
 
 function resize() {
   const rect = canvas.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
@@ -41,7 +42,7 @@ function startAudio() {
       clock.next = audio.time + .035; clock.step = 0;
       clock.timer = setInterval(schedule, 25); schedule();
     }
-  }).catch(() => hint('音を開始できませんでした。もう一度、弦に触れてください。'));
+  }).catch(() => hint('Audio unavailable. Touch a string to retry.'));
 }
 function colorFor(id, light = 65, alpha = 1) {
   const degree = id % PER_HAND;
@@ -51,7 +52,8 @@ function colorFor(id, light = 65, alpha = 1) {
   else hue = (175 + degree * 13 + (id >= PER_HAND ? 65 : 0)) % 360;
   return `hsla(${hue},95%,${light}%,${alpha})`;
 }
-function visualize(id, strength = .7, fromLoop = false) {
+function visualize(id, strength = .7, fromLoop = false, interval = 0) {
+  if (interval) strings[id].innerEnergy = Math.max(strings[id].innerEnergy, strength);
   strings[id].energy = Math.max(strings[id].energy, strength);
   if (!calm()) {
     pulses.push({ id, age: 0, strength, fromLoop });
@@ -59,25 +61,26 @@ function visualize(id, strength = .7, fromLoop = false) {
     for (let i = 0; i < 4; i++) particles.push({ id, age: 0, speed: .5 + Math.random(), spread: (Math.random() - .5) * .09, size: 1 + Math.random() * 1.5 });
     if (particles.length > 180) particles.splice(0, particles.length - 180);
   }
-  $('noteReadout').textContent = noteName(midi(id)) + (fromLoop ? ' / LOOP' : id < PER_HAND ? ' / LEFT' : ' / RIGHT');
-  $('centerNote').textContent = noteName(midi(id)).replace(/-?\d+$/, '');
+  $('noteReadout').textContent = noteName(midi(id) + interval) + (fromLoop ? ' / LOOP' : id < PER_HAND ? ' / LEFT' : ' / RIGHT');
+  $('centerNote').textContent = noteName(midi(id) + interval).replace(/-?\d+$/, '');
+  $('centerState').textContent = interval ? `+${interval}` : '';
   lastNoteTime = frameTime;
 }
 function setLoopState(state) {
   loop.state = state;
   if (state === 'empty' || state === 'armed') $('loopProgress').style.width = '0%';
-  const labels = { empty: 'ループ録音', armed: '録音待ち', recording: '録音中', playing: '一時停止', paused: 'ループ再生' };
+  const labels = { empty: 'REC', armed: 'ARMED', recording: 'REC', playing: 'PAUSE', paused: 'PLAY' };
   const icons = { empty: '●', armed: '●', recording: '●', playing: 'Ⅱ', paused: '▶' };
   $('loopLabel').textContent = labels[state]; $('loopIcon').textContent = icons[state];
   $('loop').classList.toggle('recording', state === 'armed' || state === 'recording');
   $('loop').classList.toggle('playing', state === 'playing');
-  $('loop').setAttribute('aria-label', labels[state] + '：2小節ループ');
+  $('loop').setAttribute('aria-label', labels[state] + ': two-bar loop');
   $('clearLoop').disabled = state === 'empty';
   $('bpm').disabled = state === 'recording'; $('tap').disabled = state === 'recording';
-  const messages = { empty: '2小節を録って、重ねて弾く。', armed: '最初の一音で録音スタート。', recording: '録音中 · 2小節で自動再生', playing: 'ループ再生中 · 自由に弾き足して。', paused: 'ループ停止中 · フレーズは残っています。' };
+  const messages = { empty: '2 BARS', armed: 'PLAY TO RECORD', recording: 'RECORDING · 2 BARS', playing: 'LOOPING', paused: 'PAUSED' };
   $('loopStatus').textContent = messages[state];
 }
-function emit(id, velocity = .65, brightness = .6, when = audio.time, source = 'live') {
+function emit(id, velocity = .65, brightness = .6, when = audio.time, source = 'live', interval = 0) {
   if (id === null || !audio.context) return;
   const now = audio.time;
   if (source === 'live' && loop.state === 'armed') {
@@ -89,24 +92,30 @@ function emit(id, velocity = .65, brightness = .6, when = audio.time, source = '
   if ((source === 'live' || source === 'arp') && loop.state === 'recording') {
     const step = loopStep(when, loop.startTime, config.bpm);
     if (when < loop.startTime + LOOP_STEPS * stepSeconds(config.bpm)) {
-      const existing = loop.events.find(event => event.step === step && event.id === id);
+      const existing = loop.events.find(event => event.step === step && event.id === id && event.interval === interval);
       if (existing) { existing.velocity = Math.max(existing.velocity, velocity); existing.brightness = brightness; }
-      else if (loop.events.length < 256) loop.events.push({ step, id, velocity, brightness });
+      else if (loop.events.length < 256) loop.events.push({ step, id, velocity, brightness, interval });
     }
   }
-  audio.play(midi(id), { voice: config.voice, velocity, brightness, when, pan: Math.cos(angleForString(id)) * .45 });
+  audio.play(midi(id) + interval, { voice: config.voice, velocity, brightness, when, pan: Math.cos(angleForString(id)) * .45 });
   if (when > now + .015) {
-    visualQueue.push({ time: when, id, velocity, fromLoop: source === 'loop' });
+    visualQueue.push({ time: when, id, velocity, interval, fromLoop: source === 'loop' });
     if (visualQueue.length > 256) visualQueue.shift();
-  } else visualize(id, velocity, source === 'loop');
+  } else visualize(id, velocity, source === 'loop', interval);
 }
-function pluck(id, velocity, brightness) {
+function addHarmonics(id, layer, velocity, brightness, when = audio.time, source = 'live', previous = 0) {
+  for (const interval of harmonicOffsets(layer)) {
+    if (!harmonicOffsets(previous).includes(interval)) emit(id, velocity * .65, brightness + .15, when, source, interval);
+  }
+}
+function pluck(id, velocity, brightness, layer = 0) {
   if (id === null) return;
   const now = performance.now() / 1000;
   if (now - strings[id].last < .04) return; // Suppress boundary jitter, not musical retriggers.
   strings[id].last = now;
   const notes = config.mode === 'chord' && id < PER_HAND ? chordStrings(id) : [id];
   notes.forEach((note, i) => emit(note, velocity * (i ? .65 : 1), brightness, audio.time + i * .016));
+  addHarmonics(id, layer, velocity, brightness);
 }
 function schedule() {
   if (!audio.context || audio.context.state !== 'running') return;
@@ -123,7 +132,7 @@ function schedule() {
     if (config.metronome && step % 4 === 0) audio.click(when, step % 16 === 0);
     if (loop.state === 'playing' || (loop.state === 'recording' && step >= loop.startStep + LOOP_STEPS)) {
       const slot = ((step - loop.startStep) % LOOP_STEPS + LOOP_STEPS) % LOOP_STEPS;
-      for (const event of loop.events) if (event.step === slot) emit(event.id, event.velocity * .8, event.brightness, when, 'loop');
+      for (const event of loop.events) if (event.step === slot) emit(event.id, event.velocity * .8, event.brightness, when, 'loop', event.interval || 0);
     }
     if (config.mode === 'arp' && step % 2 === 0) {
       const unique = new Map();
@@ -131,7 +140,10 @@ function schedule() {
       for (const finger of unique.values()) {
         if (when - finger.started < .09) continue;
         const notes = chordStrings(finger.id), index = Math.floor(step / 2) % 4;
-        emit(notes[[0, 1, 2, 1][index]], finger.velocity * .85, finger.brightness, when, 'arp');
+        const note = notes[[0, 1, 2, 1][index]];
+        emit(note, finger.velocity * .85, finger.brightness, when, 'arp');
+        const layer = Number.isFinite(finger.x) ? harmonicLayer(finger, finger.id, geometry, frameTime, calm(), finger.layer) : finger.layer || 0;
+        addHarmonics(note, layer, finger.velocity * .85, finger.brightness, when, 'arp');
       }
     }
     clock.step++; clock.next += duration;
@@ -146,9 +158,9 @@ canvas.addEventListener('pointerdown', event => {
   if (event.pointerType === 'mouse' && event.button !== 0) return;
   event.preventDefault(); startAudio(); canvas.setPointerCapture(event.pointerId);
   const point = eventPoint(event), id = stringAt(point.x, point.y, geometry);
-  const finger = { ...point, id, velocity: .67, brightness: brightnessAt(point), started: audio.time };
-  fingers.set(event.pointerId, finger); pluck(id, finger.velocity, finger.brightness);
-  hint(config.mode === 'arp' ? '線を押さえると、音が巡る。' : '外側で明るく。速くなぞると、強く。');
+  const finger = { ...point, id, layer: harmonicLayer(point, id, geometry, frameTime, calm()), velocity: .67, brightness: brightnessAt(point), started: audio.time };
+  fingers.set(event.pointerId, finger); pluck(id, finger.velocity, finger.brightness, finger.layer);
+  hint(config.mode === 'arp' ? 'Hold a string to arpeggiate.' : 'Curl inward for fifth and octave harmonics.');
 });
 canvas.addEventListener('pointermove', event => {
   const finger = fingers.get(event.pointerId); if (!finger) return;
@@ -159,10 +171,12 @@ canvas.addEventListener('pointermove', event => {
     const distance = Math.hypot(point.x - finger.x, point.y - finger.y), dt = Math.max(8, point.time - finger.time);
     const velocity = clamp(.4 + distance / dt * .32, .4, 1), brightness = brightnessAt(point);
     const ids = crossedStrings(finger, point, geometry);
-    for (const id of ids) pluck(id, velocity, brightness);
+    for (const id of ids) pluck(id, velocity, brightness, harmonicLayer(point, id, geometry, frameTime, calm()));
     const id = stringAt(point.x, point.y, geometry);
+    const layer = harmonicLayer(point, id, geometry, frameTime, calm(), id === finger.id ? finger.layer : 0);
+    if (id !== null && id === finger.id && layer > finger.layer) addHarmonics(id, layer, velocity, brightness, audio.time, 'live', finger.layer);
     if (id !== finger.id) finger.started = audio.time;
-    Object.assign(finger, point, { id, velocity, brightness });
+    Object.assign(finger, point, { id, velocity, brightness, layer });
   }
 });
 function release(event) { fingers.delete(event.pointerId); }
@@ -176,13 +190,14 @@ canvas.addEventListener('keydown', event => {
     event.preventDefault(); if (event.repeat || pressedKeys.has(event.code)) return;
     pressedKeys.add(event.code); startAudio();
     const id = index < 7 ? index : PER_HAND + index - 7;
-    fingers.set(event.code, { id, velocity: .7, brightness: .65, started: audio.time });
-    pluck(id, .7, .65);
+    const layer = event.altKey ? 2 : event.shiftKey ? 1 : 0;
+    fingers.set(event.code, { id, layer, velocity: .7, brightness: .65, started: audio.time });
+    pluck(id, .7, .65, layer);
   } else if (event.code === 'Space') { event.preventDefault(); if (!event.repeat) toggleLoop(); }
 });
 // Release at document level as focus can move to a control before keyup.
 document.addEventListener('keyup', event => { pressedKeys.delete(event.code); fingers.delete(event.code); });
-document.addEventListener('keydown', event => { if (event.code === 'Escape' && !$('settings').open) { pause(); hint('全停止。弦に触れると再開できます。'); } });
+document.addEventListener('keydown', event => { if (event.code === 'Escape' && !$('settings').open) { pause(); hint('Stopped. Touch a string to resume.'); } });
 
 function toggleLoop() {
   startAudio();
@@ -212,8 +227,14 @@ for (const element of document.querySelectorAll('[data-mode]')) element.addEvent
     const active = button.dataset.mode === config.mode;
     button.classList.toggle('selected', active); button.setAttribute('aria-pressed', String(active));
   }
-  $('centerState').textContent = { pluck: 'PLUCK THE LIGHT', chord: 'CHORD & MELODY', arp: 'RIPPLE ARPEGGIO' }[config.mode];
-  hint({ pluck: '一本の光に、一つの音。', chord: '左手で和音。右手でメロディー。', arp: '線を押さえて、テンポに乗せる。' }[config.mode]);
+  $('centerState').textContent = '';
+  hint({ pluck: 'One note per string.', chord: 'Left chords, right melody.', arp: 'Hold strings to arpeggiate.' }[config.mode]);
+});
+$('randomize').addEventListener('click', () => {
+  Object.assign(config, randomPatch(config));
+  for (const id of ['root', 'scale', 'voice', 'palette']) $(id).value = String(config[id]);
+  tuningReadout();
+  hint(`${NOTES[config.root]}, ${SCALES[config.scale].name}, ${config.voice}`);
 });
 for (const id of ['root', 'scale', 'voice', 'octave', 'palette', 'swing']) $(id).addEventListener('change', event => {
   config[id] = ['root', 'octave', 'swing'].includes(id) ? Number(event.target.value) : event.target.value;
@@ -228,7 +249,7 @@ for (const id of ['showNotes', 'calm', 'metronome']) $(id).addEventListener('cha
   if (id === 'metronome' && config.metronome) startAudio();
 });
 $('mute').addEventListener('click', () => {
-  muted = !muted; audio.configure({ muted }); $('mute').textContent = muted ? '音 OFF' : '音 ON';
+  muted = !muted; audio.configure({ muted }); $('mute').textContent = muted ? 'MUTED' : 'SOUND';
   $('mute').setAttribute('aria-pressed', String(muted));
 });
 $('settingsOpen').addEventListener('click', () => { fingers.clear(); pressedKeys.clear(); $('settings').showModal(); });
@@ -243,7 +264,7 @@ function pause() {
   config.metronome = false; $('metronome').checked = false;
   audio.dispose();
 }
-audio.onInterrupted = () => { pause(); hint('音声を一時停止しました。弦に触れると再開します。'); };
+audio.onInterrupted = () => { pause(); hint('Audio paused. Touch a string to resume.'); };
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 addEventListener('pagehide', pause);
 // Native selectors may briefly blur the window; only an actual hidden page stops it.
@@ -254,8 +275,17 @@ function draw(ms) {
   const { width, height, cx, cy, radius, inner } = geometry;
   ctx.clearRect(0, 0, width, height);
   const isCalm = calm(), glow = config.glow / 100;
+  // Breathing tips can catch a resting finger; only new harmonic layers sound.
+  // ARP keeps those additions on its audio-clock grid instead.
+  for (const finger of fingers.values()) {
+    if (!Number.isFinite(finger.x) || finger.id === null) continue;
+    const layer = harmonicLayer(finger, finger.id, geometry, frameTime, isCalm, finger.layer);
+    if (layer > finger.layer && config.mode !== 'arp') addHarmonics(finger.id, layer, finger.velocity, finger.brightness, audio.time, 'live', finger.layer);
+    finger.layer = layer;
+  }
+
   for (let i = visualQueue.length - 1; i >= 0; i--) {
-    const event = visualQueue[i]; if (event.time <= audio.time) { visualize(event.id, event.velocity, event.fromLoop); visualQueue.splice(i, 1); }
+    const event = visualQueue[i]; if (event.time <= audio.time) { visualize(event.id, event.velocity, event.fromLoop, event.interval); visualQueue.splice(i, 1); }
   }
   ctx.save(); ctx.translate(cx, cy);
   const fog = ctx.createRadialGradient(0, 0, inner, 0, 0, radius * 1.3);
@@ -267,6 +297,7 @@ function draw(ms) {
     ctx.beginPath(); ctx.arc(0, 0, radius * fraction, 0, Math.PI * 2); ctx.stroke();
   }
   for (const string of strings) {
+    string.innerEnergy *= Math.exp(-dt * 3);
     string.energy *= Math.exp(-dt * (isCalm ? 6 : 3.3));
     const energy = string.energy, a = string.angle, c = Math.cos(a), s = Math.sin(a);
     const length = radius * (1 - (string.id % 7) * .008);
@@ -284,6 +315,22 @@ function draw(ms) {
     ctx.shadowBlur = 0;
     ctx.fillStyle = colorFor(string.id, 80, .7 + energy * .3);
     ctx.beginPath(); ctx.arc(c * length, s * length, 1.8 + energy * 1.3, 0, Math.PI * 2); ctx.fill();
+    // A separate white crown breathes inside the colored strings. Its visible
+    // tips are also the fifth boundary; the deeper portion adds the octave.
+    const tip = innerRadius(string.id, geometry, frameTime, isCalm);
+    const whiteAngle = a + .024, wc = Math.cos(whiteAngle), ws = Math.sin(whiteAngle);
+    const whiteEnergy = string.innerEnergy;
+    ctx.strokeStyle = `rgba(245,250,255,${.5 + whiteEnergy * .5})`;
+    ctx.lineWidth = 1.15 + whiteEnergy * 1.8;
+    ctx.shadowColor = '#e8faff'; ctx.shadowBlur = (3 + whiteEnergy * 16) * glow;
+    ctx.beginPath(); ctx.moveTo(wc * (inner + 4), ws * (inner + 4));
+    ctx.lineTo(wc * tip, ws * tip); ctx.stroke();
+    ctx.fillStyle = '#f4fbff'; ctx.beginPath();
+    ctx.arc(wc * tip, ws * tip, 1.5 + whiteEnergy, 0, Math.PI * 2); ctx.fill();
+    const octaveRing = inner + (tip - inner) * .46;
+    ctx.fillStyle = '#ecf7ff99'; ctx.beginPath();
+    ctx.arc(wc * octaveRing, ws * octaveRing, 1.1, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
     if (config.showNotes) {
       const labelRadius = radius + 13;
       ctx.font = `${energy > .15 ? 11 : 10}px ui-monospace, monospace`;
@@ -330,7 +377,8 @@ function draw(ms) {
   } else $('beatDot').classList.remove('on');
   if (frameTime - lastNoteTime > 2) {
     $('centerNote').textContent = NOTES[config.root];
-    $('noteReadout').textContent = '28 STRINGS';
+    $('noteReadout').textContent = '';
+    $('centerState').textContent = '';
   }
   requestAnimationFrame(draw);
 }

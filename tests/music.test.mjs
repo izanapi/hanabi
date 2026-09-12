@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SCALES, STRING_COUNT, midiForString, frequency, noteName, angleForString, stringAt, crossedStrings, chordStrings, loopStep, stepSeconds, bpmFromTaps } from '../music.mjs';
+import { SCALES, STRING_COUNT, midiForString, frequency, noteName, angleForString, stringAt, crossedStrings, chordStrings, loopStep, stepSeconds, bpmFromTaps, innerRadius, harmonicLayer, harmonicOffsets, randomPatch } from '../music.mjs';
 
 test('all 28 strings stay in key across every root, scale and octave', () => {
   for (const [scale, { intervals }] of Object.entries(SCALES)) for (let root = 0; root < 12; root++) for (const octave of [-1, 0, 1]) {
@@ -48,4 +48,33 @@ test('tap tempo uses a median to tolerate an accidental short tap', () => {
   assert.equal(bpmFromTaps([0, 500, 1000, 1500]), 120);
   assert.equal(bpmFromTaps([0, 500, 1000, 1100, 1600]), 120);
   assert.equal(bpmFromTaps([0, 1]), 200);
+});
+
+test('inner crown breathes inside the outer strings and reduced motion freezes it', () => {
+  for (let id = 0; id < 28; id++) {
+    const a = innerRadius(id, geometry, 0), b = innerRadius(id, geometry, 2);
+    assert.ok(a > geometry.inner && a < geometry.radius * .7);
+    assert.notEqual(a, b);
+    assert.equal(innerRadius(id, geometry, 0, true), innerRadius(id, geometry, 20, true));
+  }
+});
+test('inner radius resolves to fifth and octave layers with a silent center', () => {
+  const id = 4, tip = innerRadius(id, geometry, 0, true);
+  const at = r => point(id, r);
+  assert.equal(harmonicLayer(at(150), id, geometry, 0, true), 0);
+  assert.equal(harmonicLayer(at(tip - 7), id, geometry, 0, true), 1);
+  assert.equal(harmonicLayer(at(geometry.inner + 5), id, geometry, 0, true), 2);
+  assert.equal(harmonicLayer(at(10), id, geometry, 0, true), 0);
+  assert.equal(harmonicLayer(at(tip + 1), id, geometry, 0, true, 1), 1);
+  assert.deepEqual(harmonicOffsets(2), [7, 12]);
+});
+test('random patches change musical settings without changing tempo, gain or loop state', () => {
+  const current = {root:0, scale:'hirajoshi', voice:'kalimba', palette:'neon', bpm:92, volume:65};
+  for (const seed of [0, .25, .5, .75, .999]) {
+    const patch = randomPatch(current, () => seed);
+    for (const key of ['root','scale','voice','palette']) assert.notEqual(patch[key], current[key]);
+    assert.equal(patch.bpm, undefined); assert.equal(patch.volume, undefined);
+    assert.ok(SCALES[patch.scale]);
+  }
+  assert.equal(Object.keys(SCALES).length, 20);
 });

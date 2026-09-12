@@ -15,7 +15,7 @@ export class InstrumentAudio {
   }
   build() {
     const Constructor = globalThis.AudioContext || globalThis.webkitAudioContext;
-    if (!Constructor) throw new Error('このブラウザは音声合成に対応していません。');
+    if (!Constructor) throw new Error('Web Audio is not supported in this browser.');
     const ac = this.context = new Constructor({ latencyHint: 'interactive' });
     this.input = ac.createGain();
     const highpass = ac.createBiquadFilter();

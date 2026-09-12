@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SCALES, STRING_COUNT, midiForString, frequency, noteName, angleForString, stringAt, crossedStrings, chordStrings, loopStep, stepSeconds, bpmFromTaps, innerRadius, harmonicLayer, harmonicOffsets, randomPatch } from '../music.mjs';
+import { SCALES, STRING_COUNT, midiForString, frequency, noteName, angleForString, stringAt, crossedStrings, chordStrings, loopStep, stepSeconds, bpmFromTaps, innerRadius, harmonicLayer, harmonicOffsets, randomPatch, accompanimentPhrase, recordingClick } from '../music.mjs';
 
 test('all 28 strings stay in key across every root, scale and octave', () => {
   for (const [scale, { intervals }] of Object.entries(SCALES)) for (let root = 0; root < 12; root++) for (const octave of [-1, 0, 1]) {
@@ -50,12 +50,12 @@ test('tap tempo uses a median to tolerate an accidental short tap', () => {
   assert.equal(bpmFromTaps([0, 1]), 200);
 });
 
-test('inner crown breathes inside the outer strings and reduced motion freezes it', () => {
+test('harmonic boundaries stay stable when the spectrum animates', () => {
   for (let id = 0; id < 28; id++) {
-    const a = innerRadius(id, geometry, 0), b = innerRadius(id, geometry, 2);
-    assert.ok(a > geometry.inner && a < geometry.radius * .7);
-    assert.notEqual(a, b);
-    assert.equal(innerRadius(id, geometry, 0, true), innerRadius(id, geometry, 20, true));
+    const radius = innerRadius(id, geometry, 0);
+    assert.ok(radius > geometry.inner && radius < geometry.radius * .7);
+    assert.equal(radius, innerRadius(id, geometry, 20));
+    assert.equal(radius, innerRadius(id, geometry, 20, true));
   }
 });
 test('inner radius resolves to fifth and octave layers with a silent center', () => {
@@ -76,5 +76,30 @@ test('random patches change musical settings without changing tempo, gain or loo
     assert.equal(patch.bpm, undefined); assert.equal(patch.volume, undefined);
     assert.ok(SCALES[patch.scale]);
   }
-  assert.equal(Object.keys(SCALES).length, 20);
+  assert.equal(Object.keys(SCALES).length, 14);
+});
+
+test('curated scales retain a tonic/fifth and omit the abrasive random choices', () => {
+  for (const scale of Object.values(SCALES)) assert.ok(scale.intervals.includes(0) && scale.intervals.includes(7));
+  for (const name of ['diminishedHW','diminishedWH','chromatic','locrian','wholeTone']) assert.equal(SCALES[name], undefined);
+  for (const name of ['hirajoshi','dorian','insen','ritusen','kumoi','ryukyu']) assert.ok(SCALES[name]);
+});
+test('accompaniment is sparse, varies, and stays on valid strings in every scale', () => {
+  for (const scale of Object.keys(SCALES)) {
+    const phrase = accompanimentPhrase(scale, () => .2);
+    assert.equal(phrase.length, 6); assert.equal(phrase[0].id, 0);
+    assert.notDeepEqual(phrase, accompanimentPhrase(scale, () => .8));
+    for (const note of phrase) {
+      assert.ok(note.id >= 0 && note.id < 14); assert.ok(note.step >= 0 && note.step < 32);
+      assert.ok(note.velocity < .5);
+    }
+  }
+});
+test('recording clicks align to the take and end after two bars', () => {
+  const loop = {state:'recording',startStep:7};
+  const clicks = Array.from({length:40}, (_, step) => ({step,click:recordingClick(step,loop)})).filter(x=>x.click);
+  assert.deepEqual(clicks.map(x=>x.step), [7,11,15,19,23,27,31,35]);
+  assert.deepEqual(clicks.filter(x=>x.click.accent).map(x=>x.step), [7,23]);
+  assert.equal(recordingClick(40,loop), null);
+  assert.ok(recordingClick(40,loop,true));
 });

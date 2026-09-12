@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import * as music from '../music.mjs';
-import { InstrumentAudio } from '../audio.mjs';
+import { InstrumentAudio, hallImpulse } from '../audio.mjs';
 
 class Param {
   constructor() { this.value = 0; }
@@ -14,7 +14,7 @@ class Param {
 }
 class Node {
   constructor(ac) { this.ac = ac; for (const key of ['gain','frequency','pan','threshold','knee','ratio','attack','release','delayTime']) this[key] = new Param(); }
-  connect() {} disconnect() { this.disconnected = true; }
+  connect(target) { (this.connections ??= []).push(target); } disconnect() { this.disconnected = true; }
   start(time) { assert.ok(time >= 0); this.startTime = time; }
   stop(time) { assert.ok(time >= 0); this.stopTime = time; }
 }
@@ -23,15 +23,17 @@ class FakeAudioContext {
   node() { const node = new Node(this); this.nodes.push(node); return node; }
   createGain() { return this.node(); } createBiquadFilter() { return this.node(); } createStereoPanner() { return this.node(); }
   createOscillator() { return this.node(); } createBufferSource() { return this.node(); } createDelay() { return this.node(); }
+  createAnalyser() { const node = this.node(); node.frequencyBinCount = 512; node.getByteFrequencyData = array => array.fill(0); return node; }
   createDynamicsCompressor() { return this.node(); } createConvolver() { return this.node(); }
-  createBuffer(channels, length) { return { getChannelData: () => new Float32Array(length) }; }
+  createBuffer(channels, length) { const data = Array.from({length: channels}, () => new Float32Array(length)); return { length, numberOfChannels: channels, getChannelData: channel => data[channel] }; }
   resume() { this.state = 'running'; return Promise.resolve(); }
   close() { this.state = 'closed'; return Promise.resolve(); }
   advance(seconds) { this.currentTime += seconds; for (const node of this.nodes) if (!node.ended && node.stopTime <= this.currentTime) { node.ended = true; node.onended?.(); } }
 }
 globalThis.AudioContext = FakeAudioContext;
 class TracedAudio extends InstrumentAudio {
-  constructor() { super(); this.calls = []; }
+  constructor() { super(); this.calls = []; this.clicks = []; }
+  click(when, accent) { this.clicks.push({when, accent}); super.click(when, accent); }
   play(midi, options) { this.calls.push({ midi, ...options }); super.play(midi, options); }
 }
 class Element {
@@ -59,7 +61,7 @@ function harness() {
     addEventListener: (...args) => globalEvents.addEventListener(...args) };
   vm.createContext(sandbox);
   const source = fs.readFileSync(new URL('../app.mjs', import.meta.url), 'utf8').replace(/^import .*;\n/gm, '');
-  vm.runInContext(source + '\nglobalThis.testAPI = { audio, clock, loop, config, fingers, geometry, schedule, pause, emit, setLoopState, changeTempo, draw };', sandbox);
+  vm.runInContext(source + '\nglobalThis.testAPI = { audio, clock, loop, flow, config, fingers, geometry, schedule, pause, emit, setLoopState, changeTempo, draw };', sandbox);
   const api = sandbox.testAPI;
   return { ...api, elements, document, modes, globalEvents,
     async flush() { await Promise.resolve(); await Promise.resolve(); },
@@ -175,13 +177,48 @@ test('interface is English-only and the three mix sliders live on the main surfa
   const main = html.split('<dialog')[0];
   for (const id of ['echo','hall','volume','randomize']) assert.ok(main.includes(`id="${id}"`));
 });
-test('breathing white tips add a harmonic when they reach a resting finger', async () => {
+test('fixed harmonic boundaries do not generate notes under a resting finger', async () => {
   const h = harness(), id = 10;
-  const radius = h.geometry.inner + (h.geometry.radius - h.geometry.inner) * .49;
+  const radius = music.innerRadius(id, h.geometry) + 5;
   h.pointer('pointerdown', 1, id, radius / h.geometry.radius); await h.flush();
-  const base = music.midiForString(id, 0, 'hirajoshi');
-  assert.equal(h.audio.calls.length, 1);
-  h.advance(8); assert.ok(h.audio.calls.some(call => call.midi === base + 7));
-  h.pointer('pointerup', 1, id); const count = h.audio.calls.length; h.advance(8);
-  assert.equal(h.audio.calls.length, count); h.pause();
+  const count = h.audio.calls.length;
+  h.advance(8); assert.equal(h.audio.calls.length, count); h.pause();
+});
+
+test('Aurora is selected both in the config and settings control', () => {
+  const h = harness(); assert.equal(h.config.palette, 'aurora'); assert.equal(h.elements.get('palette').value, 'aurora');
+});
+test('recording automatically clicks for eight beats and stops without changing manual preference', async () => {
+  const h = harness(); h.elements.get('loop').dispatch('click'); h.pointer('pointerdown', 1, 2); h.pointer('pointerup', 1, 2); await h.flush();
+  h.advance(5.5); assert.equal(h.loop.state, 'playing'); assert.equal(h.audio.clicks.length, 8);
+  const count = h.audio.clicks.length; h.advance(1); assert.equal(h.audio.clicks.length, count); assert.equal(h.config.metronome, false);
+  h.config.metronome = true; h.advance(1); assert.ok(h.audio.clicks.length > count); h.pause();
+});
+test('FLOW plays without fingers, follows key changes, avoids recording itself and stops', async () => {
+  const h = harness(); h.elements.get('flow').dispatch('click'); await h.flush(); h.advance(1);
+  assert.equal(h.flow.enabled, true); assert.ok(h.audio.calls.length > 1); assert.equal(h.fingers.size, 0);
+  assert.ok(h.audio.calls.every(call => call.voice === 'velvet'));
+  h.elements.get('loop').dispatch('click'); h.advance(1); assert.equal(h.loop.state, 'armed'); assert.equal(h.loop.events.length, 0);
+  h.pointer('pointerdown', 1, 18); h.pointer('pointerup', 1, 18); h.advance(1); assert.equal(h.loop.events.length, 1);
+  h.elements.get('root').value = '2'; h.elements.get('root').dispatch('change');
+  h.elements.get('scale').value = 'ritusen'; h.elements.get('scale').dispatch('change');
+  const count = h.audio.calls.length; h.advance(2);
+  const calls = h.audio.calls.slice(count).filter(call => call.voice === 'velvet'); assert.ok(calls.length);
+  for (const call of calls) assert.ok(music.SCALES.ritusen.intervals.includes((call.midi - 2) % 12));
+  h.elements.get('flow').dispatch('click'); const stopped = h.audio.calls.length; h.advance(.5); assert.equal(h.audio.calls.length, stopped);
+  h.elements.get('flow').dispatch('click'); h.pause(); assert.equal(h.flow.enabled, false);
+});
+test('space effects use cross-feedback below unity, matched beat delays and a stereo hall', async () => {
+  const audio = new InstrumentAudio(); await audio.unlock(); audio.configure({echo:100,hall:100,bpm:120});
+  assert.ok(audio.feedback.gain.value < .7); assert.equal(audio.feedback.gain.value, audio.feedbackRight.gain.value);
+  assert.equal(audio.delay.delayTime.value, .375); assert.equal(audio.delayRight.delayTime.value, .375);
+  assert.ok(audio.feedback.connections.includes(audio.delay)); assert.ok(audio.feedbackRight.connections.includes(audio.delayRight));
+  assert.ok(audio.hall.gain.value >= 1); assert.equal(audio.readSpectrum().length, 512);
+  const impulse = hallImpulse(audio.context); assert.equal(impulse.numberOfChannels, 2); assert.equal(impulse.length, 5500);
+  const left = impulse.getChannelData(0), right = impulse.getChannelData(1);
+  assert.notDeepEqual(left, right);
+  const energy = data => data.reduce((sum, n) => sum + n*n,0)/data.length;
+  assert.ok(energy(left.slice(3000,4000)) > 1e-6, 'audible long tail');
+  assert.ok(energy(left.slice(4500)) < energy(left.slice(1000,2000))*.01, 'tail decays');
+  audio.dispose(); assert.equal(audio.readSpectrum(),null);
 });

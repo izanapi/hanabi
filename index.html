@@ -30,11 +30,11 @@
   </section>
   <footer>
     <section class="main-mix" aria-label="Mix">
-      <label>ECHO <output id="echoValue">25</output><input id="echo" type="range" min="0" max="80" value="25"></label>
-      <label>HALL <output id="hallValue">35</output><input id="hall" type="range" min="0" max="80" value="35"></label>
+      <label>ECHO <output id="echoValue">30</output><input id="echo" type="range" min="0" max="100" value="30"></label>
+      <label>HALL <output id="hallValue">45</output><input id="hall" type="range" min="0" max="100" value="45"></label>
       <label>VOLUME <output id="volumeValue">65</output><input id="volume" type="range" min="0" max="100" value="65"></label>
     </section>
-    <div class="modes" role="group" aria-label="Play mode"><button class="selected" data-mode="pluck" aria-pressed="true">PLUCK</button><button data-mode="chord" aria-pressed="false">CHORD</button><button data-mode="arp" aria-pressed="false">ARP</button></div>
+    <div class="modes" role="group" aria-label="Play mode"><button class="selected" data-mode="pluck" aria-pressed="true">PLUCK</button><button data-mode="chord" aria-pressed="false">CHORD</button><button data-mode="arp" aria-pressed="false">ARP</button><button id="flow" aria-label="Generative accompaniment" aria-pressed="false">FLOW</button></div>
     <div class="transport">
       <button id="tap" aria-label="Tap tempo"><span class="beat-dot" id="beatDot"></span>TAP</button>
       <label class="tempo"><input id="bpm" type="number" min="40" max="200" value="92" inputmode="numeric" aria-label="Tempo in BPM"><small>BPM</small></label>
@@ -49,13 +49,13 @@
   <div class="sheet-header"><h2 id="settingsTitle">Settings</h2><button id="settingsClose" aria-label="Close settings">CLOSE</button></div>
   <div class="settings-grid">
     <label>Octave<select id="octave"><option value="-1">−1</option><option value="0" selected>0</option><option value="1">＋1</option></select></label>
-    <label>Color<select id="palette"><option value="neon">Neon</option><option value="aurora">Aurora</option><option value="ember">Ember</option></select></label>
+    <label>Color<select id="palette"><option value="neon">Neon</option><option value="aurora" selected>Aurora</option><option value="ember">Ember</option></select></label>
     <label>Decay <output id="decayValue">55</output><input id="decay" type="range" min="0" max="100" value="55"></label>
     <label>Glow <output id="glowValue">70</output><input id="glow" type="range" min="0" max="100" value="70"></label>
     <label>Groove<select id="swing"><option value="0">Straight</option><option value="0.16">Light swing</option><option value="0.3">Deep swing</option></select></label>
   </div>
   <div class="switches"><label><input id="metronome" type="checkbox"> Metronome</label><label><input id="showNotes" type="checkbox" checked> Note labels</label><label><input id="calm" type="checkbox"> Reduced motion</label></div>
-  <div class="guide"><p><strong>Strings.</strong> Swipe to play. Left is lower, right is higher. Faster swipes play louder; the outer edge sounds brighter.</p><p><strong>Inner strings.</strong> Curl into the white crown to add a perfect fifth (+7 semitones). Move deeper to add an octave (+12) as well. The white tips breathe; their visible length is the harmonic boundary. The center is silent.</p><p><strong>Modes.</strong> CHORD adds left-hand harmony. ARP repeats held notes as arpeggios. Shift + a note key adds a fifth; Alt adds a fifth and an octave.</p><p><strong>Loop.</strong> Press REC, then play. Two bars repeat automatically. PAUSE keeps the phrase; CLEAR erases it. Key and scale changes transpose the loop, including inner harmonics.</p><p><strong>Dice.</strong> Randomizes key, scale, voice and color. Tempo, mix and your loop stay unchanged.</p><p><strong>Keys.</strong> A S D F G H J: bass. Q W E R T Y U: treble. Space: loop. Esc: stop.</p></div>
+  <div class="guide"><p><strong>Strings.</strong> Swipe to play. Left is lower, right is higher. Faster swipes play louder; the outer edge sounds brighter.</p><p><strong>Inner strings.</strong> Curl into the inner spectrum ring to add a perfect fifth (+7 semitones). Move deeper to add an octave (+12) as well. The two thin rings mark the harmonic boundaries. The segmented spectrum reacts to the sound. The center is silent.</p><p><strong>Modes.</strong> CHORD adds left-hand harmony. ARP repeats held notes as arpeggios. Shift + a note key adds a fifth; Alt adds a fifth and an octave.</p><p><strong>Loop.</strong> Press REC, then play. A click guides the recording. After two bars, the loop repeats and the automatic click stops. PAUSE keeps the phrase; CLEAR erases it. Key and scale changes transpose the loop, including inner harmonics.</p><p><strong>FLOW.</strong> A quiet, evolving accompaniment follows your key, scale and tempo. Play over it, or record your own part. FLOW is not recorded into your loop. Tap FLOW again to stop it.</p><p><strong>Space.</strong> ECHO sends tempo-synced repeats between left and right. HALL adds a long stereo tail. Headphones make the width easier to hear.</p><p><strong>Dice.</strong> Randomizes key, scale, voice and color. Tempo, mix and your loop stay unchanged.</p><p><strong>Keys.</strong> A S D F G H J: bass. Q W E R T Y U: treble. Space: loop. Esc: stop.</p></div>
 </dialog>
 <script type="module" src="app.mjs"></script>
 </body>

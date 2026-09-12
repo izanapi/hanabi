@@ -1,26 +1,20 @@
 // Pure musical rules shared by the instrument and its regression tests.
 export const NOTES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
 export const SCALES = {
+  hirajoshi: { name: 'Hirajoshi', intervals: [0, 2, 3, 7, 8] },
   pentatonic: { name: 'Major pentatonic', intervals: [0, 2, 4, 7, 9] },
   minorPent: { name: 'Minor pentatonic', intervals: [0, 3, 5, 7, 10] },
-  major: { name: 'Major', intervals: [0, 2, 4, 5, 7, 9, 11] },
-  minor: { name: 'Natural minor', intervals: [0, 2, 3, 5, 7, 8, 10] },
+  major: { name: 'Ionian / Major', intervals: [0, 2, 4, 5, 7, 9, 11] },
   dorian: { name: 'Dorian', intervals: [0, 2, 3, 5, 7, 9, 10] },
+  phrygian: { name: 'Phrygian', intervals: [0, 1, 3, 5, 7, 8, 10] },
   lydian: { name: 'Lydian', intervals: [0, 2, 4, 6, 7, 9, 11] },
   mixolydian: { name: 'Mixolydian', intervals: [0, 2, 4, 5, 7, 9, 10] },
-  phrygian: { name: 'Phrygian', intervals: [0, 1, 3, 5, 7, 8, 10] },
-  locrian: { name: 'Locrian', intervals: [0, 1, 3, 5, 6, 8, 10] },
-  harmonicMinor: { name: 'Harmonic minor', intervals: [0, 2, 3, 5, 7, 8, 11] },
-  melodicMinor: { name: 'Melodic minor', intervals: [0, 2, 3, 5, 7, 9, 11] },
-  harmonicMajor: { name: 'Harmonic major', intervals: [0, 2, 4, 5, 7, 8, 11] },
-  doubleHarmonic: { name: 'Double harmonic', intervals: [0, 1, 4, 5, 7, 8, 11] },
-  minorBlues: { name: 'Minor blues', intervals: [0, 3, 5, 6, 7, 10] },
-  majorBlues: { name: 'Major blues', intervals: [0, 2, 3, 4, 7, 9] },
-  wholeTone: { name: 'Whole tone', intervals: [0, 2, 4, 6, 8, 10] },
-  diminishedHW: { name: 'Diminished H-W', intervals: [0, 1, 3, 4, 6, 7, 9, 10] },
-  diminishedWH: { name: 'Diminished W-H', intervals: [0, 2, 3, 5, 6, 8, 9, 11] },
-  chromatic: { name: 'Chromatic', intervals: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] },
-  hirajoshi: { name: 'Hirajoshi', intervals: [0, 2, 3, 7, 8] },
+  minor: { name: 'Aeolian / Minor', intervals: [0, 2, 3, 5, 7, 8, 10] },
+  ritusen: { name: 'Ritusen', intervals: [0, 2, 5, 7, 9] },
+  insen: { name: 'Insen', intervals: [0, 1, 5, 7, 10] },
+  kumoi: { name: 'Kumoi', intervals: [0, 2, 3, 7, 9] },
+  kumoijoshi: { name: 'Kumoijoshi', intervals: [0, 1, 5, 7, 8] },
+  ryukyu: { name: 'Ryukyu', intervals: [0, 4, 5, 7, 11] },
 };
 export const PER_HAND = 14;
 export const STRING_COUNT = PER_HAND * 2;
@@ -73,10 +67,9 @@ export function bpmFromTaps(taps) {
   return clamp(Math.round(60000 / Math.max(gap, 1)), 40, 200);
 }
 
-// The white crown uses the same geometry for drawing and musical hit testing.
-export function innerRadius(id, geometry, time = 0, still = false) {
-  const breath = still ? 0 : Math.sin(time * .85 + id * .34) * .055;
-  return geometry.inner + (geometry.radius - geometry.inner) * (.49 + breath);
+// Fixed harmonic boundaries: visualizer motion must not retrigger held notes.
+export function innerRadius(id, geometry) {
+  return geometry.inner + (geometry.radius - geometry.inner) * .49;
 }
 export function harmonicLayer(point, id, geometry, time = 0, still = false, previous = 0) {
   if (id === null) return 0;
@@ -102,4 +95,25 @@ export function randomPatch(current, random = Math.random) {
     voice: different(['kalimba', 'glass', 'neon', 'velvet'], current.voice),
     palette: different(['neon', 'aurora', 'ember'], current.palette),
   };
+}
+
+// A sparse two-bar phrase with a stable tonic and a small melodic motif.
+// Regenerate occasionally, rather than choosing unrelated notes on every beat.
+export function accompanimentPhrase(scale, random = Math.random) {
+  const intervals = SCALES[scale].intervals, n = intervals.length;
+  const pick = values => values[Math.floor(clamp(random(), 0, .999999) * values.length)];
+  const fifth = intervals.indexOf(7);
+  const motif = [0, pick([1, 2]), Math.max(1, fifth), pick([1, n - 1])];
+  return [
+    { step: 0, id: 0, velocity: .46, bass: true },
+    { step: 16, id: Math.max(0, fifth), velocity: .38, bass: true },
+    ...[4, 10, 20, 26].map((step, i) => ({ step, id: n + motif[i], velocity: .27 + (i % 2) * .04, bass: false })),
+  ];
+}
+export function recordingClick(step, loop, manual = false) {
+  const relative = step - loop.startStep;
+  const recording = loop.state === 'recording' && relative >= 0 && relative < LOOP_STEPS;
+  const position = recording ? relative : step;
+  if (!(recording || manual || loop.state === 'armed') || position % 4 !== 0) return null;
+  return { accent: position % 16 === 0 };
 }

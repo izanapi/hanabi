@@ -1,14 +1,14 @@
 # HANABI
 
-A two-handed light instrument. Swipe 28 tuned strings, curl into a breathing white crown for additional harmonics, and build phrases with chords, arpeggios and a two-bar loop.
+A two-handed light instrument. Swipe 28 tuned strings, curl into the inner spectrum ring for additional harmonics, and build phrases with chords, arpeggios and a two-bar loop.
 
 ## Play
 
-- The default tuning is **C Hirajoshi**, with the Kalimba voice.
+- The default tuning is **C Hirajoshi**, with the Kalimba voice and **Aurora** colors.
 - Each colored string has a fixed note in the selected scale. Each side rises in pitch from bottom to top; the right side is one octave above the left.
 - Swipe across strings to pluck them. Faster swipes play louder; the outer edge sounds brighter.
-- Curl inward into the **white strings** to add a perfect fifth (+7 semitones). Move deeper to add an octave (+12) as well. The inner tips slowly grow and shrink, and their visible length determines the harmonic boundary. Small dots mark the deeper octave boundary.
-- Moving inward on the same string adds only the new harmonic, without retriggering the base note. A breathing tip can also catch a resting finger. The center remains silent.
+- Curl inward into the **white strings** to add a perfect fifth (+7 semitones). Move deeper to add an octave (+12) as well. Two stable rings mark the fifth and octave boundaries. A segmented radial spectrum responds to the actual audio and sends straight sparks outward like the core of a firework.
+- Moving inward on the same string adds only the new harmonic, without retriggering the base note. The center remains silent.
 - Added fifths are exact chromatic intervals, not scale-quantized notes; depending on the selected scale, they can add out-of-scale color.
 
 | Mode | Left hand | Right hand |
@@ -27,17 +27,29 @@ CHORD uses alternating scale degrees and folds at the upper boundary of each han
 - **TAP / BPM** set the tempo, from 40 to 200 BPM. There is no external clock synchronization.
 - **SOUND / MUTED** toggles the output.
 
-The settings panel contains octave, color, decay, glow, swing, metronome, note labels and reduced motion. Reduced motion freezes the white crown and disables decorative particles and string vibration.
+The settings panel contains octave, color, decay, glow, swing, metronome, note labels and reduced motion. Reduced motion disables spectrum-driven animation, sparks, particles and string vibration. The harmonic touch boundaries stay fixed in either setting.
 
 ## Scales and voices
 
-20 scales: Hirajoshi, Major pentatonic, Minor pentatonic, Major, Natural minor, Dorian, Lydian, Mixolydian, Phrygian, Locrian, Harmonic minor, Melodic minor (ascending form), Harmonic major, Double harmonic, Minor blues, Major blues, Whole tone, Diminished H-W, Diminished W-H and Chromatic.
+14 selected scales: **Hirajoshi**, Major pentatonic, Minor pentatonic, Ionian / Major, Dorian, Phrygian, Lydian, Mixolydian, Aeolian / Minor, **Ritusen**, **Insen**, **Kumoi**, **Kumoijoshi** and **Ryukyu**. Diminished, chromatic, whole-tone and Locrian choices have been removed, including from randomization.
+
+The pentatonic names describe equal-tempered note sets, not complete traditional tuning or performance systems. Interval spellings were checked against the [Tonal scale dictionary](https://github.com/tonaljs/tonal/blob/main/packages/scale-type/data.ts); the Ryukyu note set matches its ionian-pentatonic entry.
 
 Four synthesized voices: **Kalimba**, **Glass**, **Neon FM** and **Velvet**. Three color palettes: **Neon**, **Aurora** and **Ember**.
 
+## Space effects
+
+**ECHO** is a tempo-synced stereo ping-pong delay. Repeats travel left to right and gradually darken. The control increases both wet level and feedback, with feedback bounded below unity. **HALL** is a diffuse, decorrelated stereo reverb with early reflections, a 28 ms pre-delay and an approximately 5.2-second RT60. Echo repeats feed a little signal into the hall as well. Headphones make the stereo movement easiest to hear.
+
+## FLOW accompaniment
+
+The compact **FLOW** button toggles a quiet generative backing part independently of PLUCK, CHORD or ARP. It combines a low tonic/fifth pattern with a sparse melodic motif. The two-bar phrase repeats and varies every four bars, following the current key, scale and tempo. Changing the scale regenerates the motif immediately; a running loop aligns a newly enabled FLOW to its next bar.
+
+Play freely over FLOW or record your part. Accompaniment notes are not copied into the loop and do not trigger an armed recording. Tap FLOW again to stop new accompaniment notes; existing tails fade. Leaving the page, an audio interruption or Esc stops FLOW too.
+
 ## Loop
 
-Press **REC**, then play. The first note starts two bars of recording, quantized to sixteenth-note positions. Playback starts automatically. Arpeggios and inner fifth/octave layers are recorded too.
+Press **REC**, then play. The first note starts two bars of recording, quantized to sixteenth-note positions. A metronome sounds while armed and throughout the recording, with an accent on each bar. Playback starts automatically, and the recording click stops. The separate manual metronome setting is preserved. Arpeggios and inner fifth/octave layers are recorded too. Metronome and FLOW notes are not recorded.
 
 Play freely over the loop. **PAUSE** preserves the phrase; **PLAY** restarts it from the beginning; **CLEAR** erases it. Pressing the loop button while armed or recording cancels that recording. Tempo is locked during recording but can change during playback.
 

@@ -1,10 +1,31 @@
 import { frequency, clamp } from './music.mjs';
 
+// A diffuse, decorrelated stereo tail with early reflections and a 5.2 s RT60.
+export function hallImpulse(ac) {
+  const duration = 5.5, length = Math.floor(ac.sampleRate * duration);
+  const impulse = ac.createBuffer(2, length, ac.sampleRate);
+  for (let channel = 0; channel < 2; channel++) {
+    const data = impulse.getChannelData(channel);
+    let smooth = 0;
+    for (let i = 0; i < length; i++) {
+      const seconds = i / ac.sampleRate;
+      smooth = smooth * .65 + (Math.random() * 2 - 1) * .35;
+      const onset = Math.min(1, seconds / .045);
+      data[i] = smooth * onset * Math.exp(-6.9078 * seconds / 5.2);
+    }
+    for (const [time, level] of [[.018, .55], [.039, .35], [.067, .24], [.109, .15]]) {
+      const index = Math.floor((time + channel * .007) * ac.sampleRate);
+      data[index] += level;
+    }
+  }
+  return impulse;
+}
+
 export class InstrumentAudio {
   constructor() {
     this.context = null;
     this.voices = [];
-    this.settings = { volume: 65, echo: 25, hall: 35, decay: 55, bpm: 92, muted: false };
+    this.settings = { volume: 65, echo: 30, hall: 45, decay: 55, bpm: 92, muted: false };
     this.onInterrupted = () => {};
   }
   unlock() {
@@ -26,20 +47,35 @@ export class InstrumentAudio {
     this.master = ac.createGain();
     this.input.connect(highpass); highpass.connect(compressor);
     compressor.connect(this.master); this.master.connect(ac.destination);
-    this.delay = ac.createDelay(2);
-    this.feedback = ac.createGain(); this.feedback.gain.value = .3;
-    const damp = ac.createBiquadFilter(); damp.frequency.value = 2600;
+    // Cross-feedback ping-pong: each repeat moves to the opposite side.
+    this.delay = ac.createDelay(2); this.delayRight = ac.createDelay(2);
+    this.feedback = ac.createGain(); this.feedbackRight = ac.createGain();
+    const send = ac.createGain(); send.channelCount = 1; send.channelCountMode = 'explicit'; send.gain.value = .8;
+    const dampLeft = ac.createBiquadFilter(), dampRight = ac.createBiquadFilter();
+    dampLeft.frequency.value = 3400; dampRight.frequency.value = 3000;
+    const left = ac.createStereoPanner(), right = ac.createStereoPanner();
+    left.pan.value = -.85; right.pan.value = .85;
     this.echo = ac.createGain();
-    this.input.connect(this.delay); this.delay.connect(damp); damp.connect(this.feedback);
-    this.feedback.connect(this.delay); this.delay.connect(this.echo); this.echo.connect(compressor);
-    const reverb = ac.createConvolver();
-    const length = Math.floor(ac.sampleRate * 2.6), impulse = ac.createBuffer(2, length, ac.sampleRate);
-    for (let channel = 0; channel < 2; channel++) {
-      const data = impulse.getChannelData(channel);
-      for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / ac.sampleRate * 3.2) * .6;
-    }
-    reverb.buffer = impulse; this.hall = ac.createGain();
-    this.input.connect(reverb); reverb.connect(this.hall); this.hall.connect(compressor);
+    this.input.connect(send); send.connect(this.delay);
+    this.delay.connect(dampLeft); dampLeft.connect(left); left.connect(this.echo);
+    dampLeft.connect(this.feedbackRight); this.feedbackRight.connect(this.delayRight);
+    this.delayRight.connect(dampRight); dampRight.connect(right); right.connect(this.echo);
+    dampRight.connect(this.feedback); this.feedback.connect(this.delay);
+    this.echo.connect(compressor);
+    const preDelay = ac.createDelay(.2); preDelay.delayTime.value = .028;
+    const reverb = ac.createConvolver(); reverb.buffer = hallImpulse(ac);
+    const hallLow = ac.createBiquadFilter(); hallLow.type = 'highpass'; hallLow.frequency.value = 180;
+    const hallHigh = ac.createBiquadFilter(); hallHigh.frequency.value = 5200;
+    this.hall = ac.createGain();
+    this.input.connect(preDelay); preDelay.connect(reverb); reverb.connect(hallLow);
+    hallLow.connect(hallHigh); hallHigh.connect(this.hall); this.hall.connect(compressor);
+    // Repeats also leave a little of their own reverberant trail.
+    const echoToHall = ac.createGain(); echoToHall.gain.value = .2;
+    this.echo.connect(echoToHall); echoToHall.connect(preDelay);
+    this.analyser = ac.createAnalyser(); this.analyser.fftSize = 1024;
+    this.analyser.smoothingTimeConstant = .78;
+    compressor.connect(this.analyser);
+    this.spectrum = new Uint8Array(this.analyser.frequencyBinCount);
     this.noise = ac.createBuffer(1, Math.floor(ac.sampleRate * .025), ac.sampleRate);
     const data = this.noise.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / data.length * 8);
@@ -53,9 +89,20 @@ export class InstrumentAudio {
     if (!this.context) return;
     const t = this.context.currentTime, s = this.settings;
     this.master.gain.setTargetAtTime(s.muted ? 0 : s.volume / 100 * .8, t, .025);
-    this.echo.gain.setTargetAtTime(s.echo / 100 * .6, t, .04);
-    this.hall.gain.setTargetAtTime(s.hall / 100 * .8, t, .04);
-    this.delay.delayTime.setTargetAtTime(60 / s.bpm * .75, t, .1);
+    const echo = clamp(s.echo / 100, 0, 1), hall = clamp(s.hall / 100, 0, 1);
+    this.echo.gain.setTargetAtTime(echo * .95, t, .04);
+    this.hall.gain.setTargetAtTime(hall * 1.1, t, .04);
+    this.feedback.gain.setTargetAtTime(.25 + echo * .42, t, .08);
+    this.feedbackRight.gain.setTargetAtTime(.25 + echo * .42, t, .08);
+    if (values.bpm !== undefined) {
+      this.delay.delayTime.setTargetAtTime(60 / s.bpm * .75, t, .1);
+      this.delayRight.delayTime.setTargetAtTime(60 / s.bpm * .75, t, .1);
+    }
+  }
+  readSpectrum() {
+    if (!this.context || !this.analyser) return null;
+    this.analyser.getByteFrequencyData(this.spectrum);
+    return this.spectrum;
   }
   get time() { return this.context?.currentTime ?? 0; }
   play(midi, { voice = 'kalimba', velocity = .65, brightness = .6, pan = 0, when = this.time } = {}) {
@@ -130,7 +177,7 @@ export class InstrumentAudio {
   }
   dispose() {
     const context = this.context;
-    this.context = null;
+    this.context = null; this.analyser = null; this.spectrum = null;
     for (const voice of this.voices) voice.clean();
     this.voices = [];
     if (context && context.state !== 'closed') context.close().catch(() => {});

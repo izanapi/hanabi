@@ -1,12 +1,13 @@
-import { NOTES, SCALES, PER_HAND, STRING_COUNT, LOOP_STEPS, clamp, midiForString, noteName, angleForString, stringAt, crossedStrings, chordStrings, stepSeconds, loopStep, bpmFromTaps, innerRadius, harmonicLayer, harmonicOffsets, randomPatch } from './music.mjs';
+import { NOTES, SCALES, PER_HAND, STRING_COUNT, LOOP_STEPS, clamp, midiForString, noteName, angleForString, stringAt, crossedStrings, chordStrings, stepSeconds, loopStep, bpmFromTaps, innerRadius, harmonicLayer, harmonicOffsets, randomPatch, accompanimentPhrase, recordingClick, frequency } from './music.mjs';
 import { InstrumentAudio } from './audio.mjs';
 
 const $ = id => document.getElementById(id);
 const canvas = $('canvas'), ctx = canvas.getContext('2d'), audio = new InstrumentAudio();
-const config = { root: 0, scale: 'hirajoshi', voice: 'kalimba', octave: 0, mode: 'pluck', palette: 'neon', bpm: 92, swing: 0, glow: 70, showNotes: true, calm: false, metronome: false };
+const config = { root: 0, scale: 'hirajoshi', voice: 'kalimba', octave: 0, mode: 'pluck', palette: 'aurora', bpm: 92, swing: 0, glow: 70, showNotes: true, calm: false, metronome: false };
 const fingers = new Map(), pressedKeys = new Set(), pulses = [], particles = [], visualQueue = [];
 const strings = Array.from({ length: STRING_COUNT }, (_, id) => ({ id, angle: angleForString(id), energy: 0, innerEnergy: 0, last: -10 }));
 const clock = { timer: null, step: 0, next: 0 };
+const flow = { enabled: false, startStep: 0, cycle: -1, phrase: [] };
 const loop = { state: 'empty', events: [], startStep: 0, startTime: 0, visibleStep: 0 };
 let geometry = { width: 0, height: 0, cx: 0, cy: 0, radius: 0, inner: 34 };
 let lastFrame = 0, frameTime = 0, muted = false, lastNoteTime = -10, taps = [], generation = 0;
@@ -19,13 +20,14 @@ const selectOptions = (element, options) => {
 selectOptions($('root'), NOTES.map((name, i) => [i, name]));
 selectOptions($('scale'), Object.entries(SCALES).map(([key, scale]) => [key, scale.name]));
 $('scale').value = config.scale;
+$('palette').value = config.palette;
 
 function resize() {
   const rect = canvas.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
   canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  geometry = { width: rect.width, height: rect.height, cx: rect.width / 2, cy: rect.height * .48,
-    radius: Math.max(65, Math.min(rect.width / 2 - 24, rect.height * .48 - 32)), inner: 34 };
+  geometry = { width: rect.width, height: rect.height, cx: rect.width / 2, cy: rect.height * .5,
+    radius: Math.max(65, Math.min(rect.width / 2 - 10, rect.height / 2 - 12)), inner: 30 };
   fingers.clear(); pressedKeys.clear();
 }
 new ResizeObserver(resize).observe($('stage')); resize();
@@ -97,7 +99,7 @@ function emit(id, velocity = .65, brightness = .6, when = audio.time, source = '
       else if (loop.events.length < 256) loop.events.push({ step, id, velocity, brightness, interval });
     }
   }
-  audio.play(midi(id) + interval, { voice: config.voice, velocity, brightness, when, pan: Math.cos(angleForString(id)) * .45 });
+  audio.play(midi(id) + interval, { voice: source === 'flow' ? 'velvet' : config.voice, velocity, brightness, when, pan: Math.cos(angleForString(id)) * .45 });
   if (when > now + .015) {
     visualQueue.push({ time: when, id, velocity, interval, fromLoop: source === 'loop' });
     if (visualQueue.length > 256) visualQueue.shift();
@@ -129,7 +131,19 @@ function schedule() {
   while (clock.next < now + .09) {
     const step = clock.step;
     const when = clock.next + (step % 2 ? duration * config.swing : 0);
-    if (config.metronome && step % 4 === 0) audio.click(when, step % 16 === 0);
+    const click = recordingClick(step, loop, config.metronome);
+    if (click) audio.click(when, click.accent);
+    if (flow.enabled && step >= flow.startStep) {
+      const relative = step - flow.startStep, cycle = Math.floor(relative / LOOP_STEPS);
+      if (cycle !== flow.cycle) {
+        // Keep each motif for four bars, then vary it. No per-note random noise.
+        if (cycle % 2 === 0 || !flow.phrase.length) flow.phrase = accompanimentPhrase(config.scale);
+        flow.cycle = cycle;
+      }
+      for (const note of flow.phrase) if (note.step === relative % LOOP_STEPS) {
+        emit(note.id, note.velocity, .38, when, 'flow', note.bass ? -12 : 0);
+      }
+    }
     if (loop.state === 'playing' || (loop.state === 'recording' && step >= loop.startStep + LOOP_STEPS)) {
       const slot = ((step - loop.startStep) % LOOP_STEPS + LOOP_STEPS) % LOOP_STEPS;
       for (const event of loop.events) if (event.step === slot) emit(event.id, event.velocity * .8, event.brightness, when, 'loop', event.interval || 0);
@@ -207,6 +221,16 @@ function toggleLoop() {
   else if (loop.state === 'playing') setLoopState('paused');
   else { loop.startStep = clock.step; loop.startTime = clock.timer === null ? audio.time + .035 : clock.next; setLoopState('playing'); }
 }
+function toggleFlow() {
+  flow.enabled = !flow.enabled;
+  $('flow').setAttribute('aria-pressed', String(flow.enabled));
+  if (flow.enabled) {
+    flow.startStep = clock.timer === null ? 0 : clock.step;
+    if (loop.state === 'playing') flow.startStep = loop.startStep + Math.ceil((flow.startStep - loop.startStep) / 16) * 16;
+    flow.cycle = -1; flow.phrase = accompanimentPhrase(config.scale); startAudio();
+  }
+}
+$('flow').addEventListener('click', toggleFlow);
 $('loop').addEventListener('click', toggleLoop);
 $('clearLoop').addEventListener('click', () => { loop.events = []; setLoopState('empty'); $('loopProgress').style.width = '0%'; });
 function changeTempo(value) {
@@ -232,6 +256,7 @@ for (const element of document.querySelectorAll('[data-mode]')) element.addEvent
 });
 $('randomize').addEventListener('click', () => {
   Object.assign(config, randomPatch(config));
+  if (flow.enabled) flow.phrase = accompanimentPhrase(config.scale);
   for (const id of ['root', 'scale', 'voice', 'palette']) $(id).value = String(config[id]);
   tuningReadout();
   hint(`${NOTES[config.root]}, ${SCALES[config.scale].name}, ${config.voice}`);
@@ -239,6 +264,7 @@ $('randomize').addEventListener('click', () => {
 for (const id of ['root', 'scale', 'voice', 'octave', 'palette', 'swing']) $(id).addEventListener('change', event => {
   config[id] = ['root', 'octave', 'swing'].includes(id) ? Number(event.target.value) : event.target.value;
   if (['root', 'scale', 'octave'].includes(id)) tuningReadout();
+  if (id === 'scale' && flow.enabled) flow.phrase = accompanimentPhrase(config.scale);
 });
 for (const id of ['volume', 'echo', 'hall', 'decay', 'glow']) $(id).addEventListener('input', event => {
   const value = Number(event.target.value); $(id + 'Value').value = value;
@@ -256,6 +282,7 @@ $('settingsOpen').addEventListener('click', () => { fingers.clear(); pressedKeys
 $('settingsClose').addEventListener('click', () => $('settings').close());
 $('settings').addEventListener('click', event => { if (event.target === $('settings')) { const r = event.target.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) event.target.close(); } });
 function pause() {
+  flow.enabled = false; $('flow').setAttribute('aria-pressed', 'false');
   generation++; fingers.clear(); pressedKeys.clear(); visualQueue.length = 0;
   if (clock.timer !== null) clearInterval(clock.timer); clock.timer = null;
   if (loop.state === 'recording') { loop.events = []; setLoopState('empty'); }
@@ -275,15 +302,7 @@ function draw(ms) {
   const { width, height, cx, cy, radius, inner } = geometry;
   ctx.clearRect(0, 0, width, height);
   const isCalm = calm(), glow = config.glow / 100;
-  // Breathing tips can catch a resting finger; only new harmonic layers sound.
-  // ARP keeps those additions on its audio-clock grid instead.
-  for (const finger of fingers.values()) {
-    if (!Number.isFinite(finger.x) || finger.id === null) continue;
-    const layer = harmonicLayer(finger, finger.id, geometry, frameTime, isCalm, finger.layer);
-    if (layer > finger.layer && config.mode !== 'arp') addHarmonics(finger.id, layer, finger.velocity, finger.brightness, audio.time, 'live', finger.layer);
-    finger.layer = layer;
-  }
-
+  const spectrum = audio.readSpectrum();
   for (let i = visualQueue.length - 1; i >= 0; i--) {
     const event = visualQueue[i]; if (event.time <= audio.time) { visualize(event.id, event.velocity, event.fromLoop, event.interval); visualQueue.splice(i, 1); }
   }
@@ -315,29 +334,41 @@ function draw(ms) {
     ctx.shadowBlur = 0;
     ctx.fillStyle = colorFor(string.id, 80, .7 + energy * .3);
     ctx.beginPath(); ctx.arc(c * length, s * length, 1.8 + energy * 1.3, 0, Math.PI * 2); ctx.fill();
-    // A separate white crown breathes inside the colored strings. Its visible
-    // tips are also the fifth boundary; the deeper portion adds the octave.
-    const tip = innerRadius(string.id, geometry, frameTime, isCalm);
-    const whiteAngle = a + .024, wc = Math.cos(whiteAngle), ws = Math.sin(whiteAngle);
-    const whiteEnergy = string.innerEnergy;
-    ctx.strokeStyle = `rgba(245,250,255,${.5 + whiteEnergy * .5})`;
-    ctx.lineWidth = 1.15 + whiteEnergy * 1.8;
-    ctx.shadowColor = '#e8faff'; ctx.shadowBlur = (3 + whiteEnergy * 16) * glow;
-    ctx.beginPath(); ctx.moveTo(wc * (inner + 4), ws * (inner + 4));
-    ctx.lineTo(wc * tip, ws * tip); ctx.stroke();
-    ctx.fillStyle = '#f4fbff'; ctx.beginPath();
-    ctx.arc(wc * tip, ws * tip, 1.5 + whiteEnergy, 0, Math.PI * 2); ctx.fill();
-    const octaveRing = inner + (tip - inner) * .46;
-    ctx.fillStyle = '#ecf7ff99'; ctx.beginPath();
-    ctx.arc(wc * octaveRing, ws * octaveRing, 1.1, 0, Math.PI * 2); ctx.fill();
+    // Radial equalizer segments, not continuously wriggling filaments.
+    // The fixed outer guide remains the touch boundary for the fifth layer.
+    const tip = innerRadius(string.id, geometry), whiteEnergy = string.innerEnergy;
+    const bin = spectrum ? Math.round(frequency(midi(string.id)) / (audio.context.sampleRate / 1024)) : 0;
+    const spectral = spectrum ? (spectrum[Math.min(bin, spectrum.length - 1)] || 0) / 255 : 0;
+    const level = isCalm ? Math.min(1, energy + whiteEnergy) : Math.min(1, spectral * .7 + energy * .75 + whiteEnergy);
+    const segments = 7, activeSegments = Math.ceil(level * segments), gap = (tip - inner - 7) / segments;
+    for (let j = 0; j < segments; j++) {
+      const lit = j < activeSegments, distance = inner + 7 + j * gap;
+      ctx.strokeStyle = lit ? `rgba(230,255,250,${.4 + level * .55})` : '#daeaff18';
+      ctx.lineWidth = lit ? 2.5 : 1.5;
+      ctx.shadowColor = '#bcfff0'; ctx.shadowBlur = lit && j === activeSegments - 1 ? glow * 7 : 0;
+      ctx.beginPath(); ctx.moveTo(c * distance, s * distance);
+      ctx.lineTo(c * (distance + gap * .65), s * (distance + gap * .65)); ctx.stroke();
+    }
+    // A brief straight spark crowns each lit meter like the core of a firework.
+    if (!isCalm && level > .2) {
+      ctx.strokeStyle = `rgba(242,255,252,${level * .7})`; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(c * tip, s * tip);
+      ctx.lineTo(c * (tip + level * radius * .09), s * (tip + level * radius * .09)); ctx.stroke();
+    }
     ctx.shadowBlur = 0;
     if (config.showNotes) {
-      const labelRadius = radius + 13;
+      const labelRadius = radius - 9;
       ctx.font = `${energy > .15 ? 11 : 10}px ui-monospace, monospace`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillStyle = energy > .15 ? colorFor(string.id, 86) : '#929ebd';
+      ctx.shadowColor = '#090b18'; ctx.shadowBlur = 5;
       ctx.fillText(noteName(midi(string.id)), c * labelRadius, s * labelRadius);
+      ctx.shadowBlur = 0;
     }
+  }
+  for (const r of [innerRadius(0, geometry), inner + (innerRadius(0, geometry) - inner) * .46]) {
+    ctx.strokeStyle = '#d7fff52d'; ctx.lineWidth = .65;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
   }
   if (!isCalm) {
     ctx.globalCompositeOperation = 'lighter';

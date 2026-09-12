@@ -1,44 +1,58 @@
 <!doctype html>
-<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#111b20"><meta name="description" content="一つの花火を、両手で奏でる。親指で音と光を変える楽器。"><title>HANABI — 両手で奏でる花火</title>
-<style>
-*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden;background:#111b20;color:#d4d6c9;font-family:Georgia,serif}main{height:100%;height:100dvh;position:relative;max-width:1100px;margin:auto}canvas{width:100%;height:100%;display:block;touch-action:none;user-select:none;-webkit-user-select:none}canvas:focus-visible{outline:1px solid #ddc985;outline-offset:-4px}header{position:absolute;left:24px;top:calc(22px + env(safe-area-inset-top));pointer-events:none}h1{font-size:16px;letter-spacing:.38em;font-weight:400;margin:0 0 8px}small{font:12px monospace;letter-spacing:.12em;color:#94aaa8}#hint{position:absolute;top:calc(82px + env(safe-area-inset-top));width:100%;text-align:center;pointer-events:none;font-size:14px;letter-spacing:.12em;color:#aabbad}footer{position:absolute;bottom:calc(16px + env(safe-area-inset-bottom));left:24px;right:24px;display:flex;gap:18px;align-items:end;border-top:1px solid #344247;padding-top:12px}label{flex:1;font:12px monospace;color:#aebeb4}input{display:block;width:100%;margin:5px 0 0;accent-color:#cbbf84;height:30px}button{color:#d4d6c9;border:1px solid #53645b;background:#152126;padding:10px;font-size:14px;border-radius:50%;min-width:44px;min-height:44px}.hand{position:absolute;bottom:calc(115px + env(safe-area-inset-bottom));pointer-events:none;line-height:1.8;font-size:14px;transition:color .2s}.hand small{font-size:12px;letter-spacing:.02em}.left{left:26px}.right{right:26px;text-align:right}.active{color:#ffe2a0}#caption{position:absolute;top:calc(25px + env(safe-area-inset-top));right:24px;font:12px monospace;color:#91a69c;pointer-events:none}@media(max-height:500px){header{top:12px}#hint{top:46px;font-size:12px}footer{bottom:8px;padding-top:5px}.hand{bottom:85px}#caption{top:16px}}@media(max-width:360px){footer{gap:10px;left:16px;right:16px}.hand{font-size:12px}}
-</style></head><body><main><canvas aria-label="両手で奏でる花火。左半分を上下に動かすと音の高さ、右半分で音色が変化。キーボードはFとJを押して演奏、上下キーで音高、左右キーで音色を調節。" tabindex="0"></canvas><header><h1>HANABI</h1><small>音の図譜 / 002</small></header><div id="hint">両手で持って、左右に親指を。</div><div id="caption">ひとつの花火</div><div class="hand left" id="left">左手 · 音の高さ<br><small>上へ、高く / 内へ、強く</small></div><div class="hand right" id="right">右手 · 光の響き<br><small>上へ、明るく / 内へ、細かく</small></div><footer><label>ECHO<input id="echo" aria-label="エコー" type="range" min="0" max="100" value="30"></label><label>HALL<input id="hall" aria-label="残響" type="range" min="0" max="100" value="30"></label><label>VOLUME<input id="volume" aria-label="音量" type="range" min="0" max="100" value="65"></label><button id="mute" aria-label="消音" aria-pressed="false">音</button></footer></main>
-<script>
-'use strict';
-const canvas=document.querySelector('canvas'),g=canvas.getContext('2d'),hint=document.querySelector('#hint'),caption=document.querySelector('#caption');
-const rand=(a,b)=>a+Math.random()*(b-a),clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
-let w,h,ac,bus,master,delay,echoGain,hallGain,muted=false,voices=0,last=0,elapsed=0;
-const fingers=new Map();
-function resize(){const r=canvas.getBoundingClientRect();w=r.width;h=r.height;const d=Math.min(devicePixelRatio||1,2);canvas.width=w*d;canvas.height=h*d;g.setTransform(d,0,0,d,0,0)}addEventListener('resize',resize);resize();
-function audio(){if(!ac){ac=new (window.AudioContext||window.webkitAudioContext)();bus=ac.createGain();master=ac.createGain();const comp=ac.createDynamicsCompressor();comp.threshold.value=-20;comp.ratio.value=6;bus.connect(comp);comp.connect(master);master.connect(ac.destination);delay=ac.createDelay(2);delay.delayTime.value=.61;const feedback=ac.createGain();feedback.gain.value=.38;echoGain=ac.createGain();bus.connect(delay);delay.connect(feedback);feedback.connect(delay);delay.connect(echoGain);echoGain.connect(comp);const con=ac.createConvolver(),buf=ac.createBuffer(2,ac.sampleRate*4,ac.sampleRate);for(let c=0;c<2;c++){const d=buf.getChannelData(c);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,3)}con.buffer=buf;hallGain=ac.createGain();bus.connect(con);con.connect(hallGain);hallGain.connect(comp);controls()}ac.resume().catch(()=>{hint.style.opacity=1;hint.textContent='もう一度触れて音を開始'});}
-function controls(){if(!ac)return;const t=ac.currentTime;master.gain.setTargetAtTime(muted?0:document.querySelector('#volume').value/100*.7,t,.08);echoGain.gain.setTargetAtTime(document.querySelector('#echo').value/100*.8,t,.1);hallGain.gain.setTargetAtTime(document.querySelector('#hall').value/100*1.5,t,.1)}document.querySelectorAll('input').forEach(e=>e.oninput=controls);document.querySelector('#mute').onclick=function(){muted=!muted;this.textContent=muted?'静':'音';this.setAttribute('aria-pressed',muted);controls()};
-const scale=[0,4,5,7,11];function pitch(n){return 440*2**((41+12*Math.floor(n/5)+scale[((n%5)+5)%5]-69)/12)}
-function sound(n,kind,duration,pan,amp=.1){if(!ac||ac.state!=='running'||voices>64)return;voices++;const t=ac.currentTime,env=ac.createGain(),p=ac.createStereoPanner(),filter=ac.createBiquadFilter();p.pan.value=clamp(pan,-1,1);filter.type='lowpass';filter.frequency.value=kind===2?1600:5000;env.connect(filter);filter.connect(p);p.connect(bus);env.gain.setValueAtTime(.0001,t);env.gain.exponentialRampToValueAtTime(amp,t+(kind===0?.4:.018));env.gain.exponentialRampToValueAtTime(.0001,t+duration);const nodes=[];const f=pitch(n);for(const ratio of (kind===1?[1,2.003,3.98]:kind===2?[1,1.013,2.71]:[.5,1,2])){const o=ac.createOscillator(),level=ac.createGain();o.type=kind===2?'triangle':'sine';o.frequency.setValueAtTime(f*ratio,t);o.frequency.exponentialRampToValueAtTime(f*ratio*(kind===2?.82:1),t+duration);level.gain.value=.34/Math.sqrt(ratio);o.connect(level);level.connect(env);o.start(t);o.stop(t+duration+.1);nodes.push(o,level)}nodes[0].onended=()=>{nodes.forEach(n=>n.disconnect());env.disconnect();filter.disconnect();p.disconnect();voices--};}
-
-// Both hands shape one persistent instrument; a gesture never creates a new bloom.
-const state={note:5,tone:.5,power:.5,density:.5,energy:0,flash:0};
-const rays=Array.from({length:144},(_,i)=>({a:i/144*Math.PI*2,l:rand(.68,1),phase:rand(0,6.28)}));
-let drone,nextSpark=0;
-function sustain(){if(drone||!ac)return;const gain=ac.createGain(),filter=ac.createBiquadFilter();gain.gain.value=0;filter.type='lowpass';filter.frequency.value=900;gain.connect(filter);filter.connect(bus);const oscillators=[.5,1,2,3].map((ratio,i)=>{const o=ac.createOscillator(),level=ac.createGain();o.type='sine';o.frequency.value=pitch(state.note)*ratio;level.gain.value=[.5,.3,.12,.05][i];o.connect(level);level.connect(gain);o.start();return{o,ratio}});drone={gain,filter,oscillators}}
-function updateHands(){const left=[...fingers.values()].filter(p=>p.side==='left'),right=[...fingers.values()].filter(p=>p.side==='right');const avg=(a,k)=>a.reduce((s,p)=>s+p[k],0)/a.length;if(left.length){state.note=Math.round(avg(left,'y')*10);state.power=avg(left,'x')}if(right.length){state.tone=avg(right,'y');state.density=avg(right,'x')}document.querySelector('#left').classList.toggle('active',!!left.length);document.querySelector('#right').classList.toggle('active',!!right.length);return{left:!!left.length,right:!!right.length}}
-function position(e,side){const r=canvas.getBoundingClientRect(),x=clamp((e.clientX-r.left)/w,0,1);return{side,x:clamp(side==='left'?x*2:(1-x)*2,0,1),y:clamp(1-(e.clientY-r.top-100)/Math.max(100,h-240),0,1)}}
-function start(){audio();sustain();hint.textContent='指をすべらせて、音と光をひらく。'}
-canvas.onpointerdown=e=>{if(e.pointerType==='mouse'&&e.button!==0)return;e.preventDefault();const r=canvas.getBoundingClientRect(),side=e.clientX-r.left<w/2?'left':'right';fingers.set(e.pointerId,position(e,side));canvas.setPointerCapture(e.pointerId);start();updateHands()};
-canvas.onpointermove=e=>{const p=fingers.get(e.pointerId);if(!p)return;e.preventDefault();fingers.set(e.pointerId,position(e,p.side));updateHands()};
-function release(e){fingers.delete(e.pointerId);updateHands()}
-canvas.onpointerup=release;canvas.onpointercancel=release;canvas.onlostpointercapture=release;
-canvas.oncontextmenu=e=>e.preventDefault();
-canvas.onkeydown=e=>{if(['KeyF','KeyJ','Space'].includes(e.code)){e.preventDefault();if(e.repeat)return;const sides=e.code==='Space'?['left','right']:[e.code==='KeyF'?'left':'right'];for(const side of sides)fingers.set(e.code+side,{side,x:.6,y:side==='left'?state.note/10:state.tone});start();updateHands()}if(e.code.startsWith('Arrow')){e.preventDefault();for(const p of fingers.values()){if(p.side==='left'&&['ArrowUp','ArrowDown'].includes(e.code))p.y=clamp(p.y+(e.code==='ArrowUp'?.1:-.1),0,1);if(p.side==='right'&&['ArrowRight','ArrowLeft'].includes(e.code))p.y=clamp(p.y+(e.code==='ArrowRight'?.1:-.1),0,1)}updateHands()}};
-canvas.onkeyup=e=>{for(const side of ['left','right'])fingers.delete(e.code+side);if(['KeyF','KeyJ','Space'].includes(e.code))e.preventDefault();updateHands()};
-function stop(){fingers.clear();updateHands();if(drone&&ac){drone.gain.gain.cancelScheduledValues(ac.currentTime);drone.gain.gain.setTargetAtTime(0,ac.currentTime,.04)}if(ac)ac.suspend().catch(()=>{})}
-document.addEventListener('visibilitychange',()=>{if(document.hidden)stop()});addEventListener('blur',stop);addEventListener('pagehide',stop);
-const reduced=matchMedia('(prefers-reduced-motion: reduce)');
-function frame(ms){const dt=Math.min(.04,(ms-last)/1000||.016);last=ms;elapsed+=dt;const hands={left:false,right:false};for(const p of fingers.values())hands[p.side]=true;const active=hands.left||hands.right;state.energy+=((active?(hands.left&&hands.right?1:.58):0)-state.energy)*dt*4;state.flash*=Math.exp(-dt*5);
-if(drone&&ac.state==='running'){const t=ac.currentTime;drone.gain.gain.setTargetAtTime(hands.left?.10+state.power*.13:0,t,.08);drone.filter.frequency.setTargetAtTime(450+state.tone*3800,t,.12);for(const {o,ratio}of drone.oscillators)o.frequency.setTargetAtTime(pitch(state.note)*ratio,t,.09);if(hands.right&&elapsed>=nextSpark){sound(state.note+5+Math.floor(state.tone*5),1,1.5+state.tone*1.4,.25,.035+state.density*.025);nextSpark=elapsed+.65-state.density*.49;state.flash=1}}
-g.fillStyle='#111b20';g.fillRect(0,0,w,h);const cx=w/2,cy=h*.46,r=Math.min(w*.45,h*.32),motion=reduced.matches?0:elapsed;g.save();g.translate(cx,cy);
-const breathing=1+Math.sin(motion*.65)*.018,extent=r*breathing*(.89+state.energy*.1);const glow=g.createRadialGradient(0,0,0,0,0,extent);glow.addColorStop(0,`rgba(223,187,98,${.12+state.energy*.12})`);glow.addColorStop(.3,'#c4a86208');glow.addColorStop(1,'#111b2000');g.fillStyle=glow;g.fillRect(-r,-r,r*2,r*2);
-for(const q of rays){const a=q.a+Math.sin(motion*.12)*.025,cs=Math.cos(a),sn=Math.sin(a),wave=Math.sin(q.phase+motion*(.6+state.tone))*.035;const len=extent*(q.l+wave+state.flash*.025);const grad=g.createLinearGradient(0,0,cs*len,sn*len);grad.addColorStop(0,'#edcc7b');grad.addColorStop(.42,`rgba(215,191,112,${.45+state.energy*.45})`);grad.addColorStop(1,`hsla(${155+state.tone*35},45%,72%,${.3+state.energy*.5})`);g.strokeStyle=grad;g.lineWidth=q.l>.85?1:.65;g.beginPath();g.moveTo(cs*12,sn*12);g.lineTo(cs*len,sn*len);g.stroke();const bead=reduced.matches?.85:((motion*(active?.22:.045)+q.phase)%1);g.fillStyle=active?'#efe3ad':'#acbca0';g.globalAlpha=.25+state.energy*.6;g.beginPath();g.arc(cs*len*bead,sn*len*bead,active?1.5:1,0,Math.PI*2);g.fill();g.globalAlpha=1}
-g.strokeStyle='#bbbd8b30';g.lineWidth=.5;g.beginPath();g.arc(0,0,extent*1.05,0,Math.PI*2);g.stroke();g.fillStyle='#f1d68b';g.beginPath();g.arc(0,0,3+state.energy*3,0,Math.PI*2);g.fill();g.restore();
-for(const [side,x]of [['left',24],['right',w-24]]){const isLeft=side==='left',value=isLeft?state.note/10:state.tone;g.strokeStyle=hands[side]?'#ddca8b99':'#8ba3a533';g.lineWidth=2;g.beginPath();g.moveTo(x,h*.32);g.lineTo(x,h*.65);g.stroke();g.fillStyle=hands[side]?'#efdb9b':'#889b8d';g.beginPath();g.arc(x,h*.65-value*h*.33,3,0,Math.PI*2);g.fill()}
-requestAnimationFrame(frame)}requestAnimationFrame(frame);
-</script></body></html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#090b18">
+  <meta name="description" content="花火の光を弾く、両手のネオン・カリンバ。キーとスケールを選び、和音、アルペジオ、ループでセッション。">
+  <title>HANABI — 光を弾く楽器</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="instrument">
+  <header>
+    <div class="brand"><h1>HANABI<span>光を弾く楽器</span></h1><span class="edition">CHROMATIC FIRE / 003</span></div>
+    <div class="header-actions"><button id="mute" aria-label="消音" aria-pressed="false">音 ON</button><button id="settingsOpen" aria-label="音と演奏の設定" aria-haspopup="dialog">調整 <span>＋</span></button></div>
+  </header>
+  <section class="tuning" aria-label="調律">
+    <label>KEY<select id="root" aria-label="キー"></select></label>
+    <label class="scale-select">SCALE<select id="scale" aria-label="スケール"></select></label>
+    <label>VOICE<select id="voice" aria-label="音色"><option value="kalimba">Kalimba</option><option value="glass">Glass</option><option value="neon">Neon FM</option><option value="velvet">Velvet</option></select></label>
+  </section>
+  <section class="stage" id="stage" aria-label="花火の楽器">
+    <div class="stage-note"><span id="keyReadout">C · MAJOR PENTATONIC</span><span id="noteReadout">28 STRINGS</span></div>
+    <canvas id="canvas" tabindex="0" aria-label="28本の光の弦。左右の線をなぞって演奏。左は低音、右は高音。キーボードはA S D F G H JとQ W E R T Y Uで演奏。"></canvas>
+    <div class="center-label" aria-hidden="true"><span id="centerNote">C</span><small id="centerState">PLUCK THE LIGHT</small></div>
+    <div class="hand-labels"><span>低音 <b>LEFT</b></span><span><b>RIGHT</b> 高音</span></div>
+    <p id="hint" role="status">光の線を、親指でなぞって。</p>
+  </section>
+  <footer>
+    <div class="modes" role="group" aria-label="奏法"><button class="selected" data-mode="pluck" aria-pressed="true">弾く <small>PLUCK</small></button><button data-mode="chord" aria-pressed="false">和音 <small>CHORD</small></button><button data-mode="arp" aria-pressed="false">波紋 <small>ARP</small></button></div>
+    <div class="transport">
+      <button id="tap" aria-label="テンポをタップして設定"><span class="beat-dot" id="beatDot"></span>TAP</button>
+      <label class="tempo"><input id="bpm" type="number" min="40" max="200" value="92" inputmode="numeric" aria-label="テンポ BPM"><small>BPM</small></label>
+      <button id="loop" class="loop-button" aria-label="2小節ループを録音"><span id="loopIcon">●</span><span id="loopLabel">ループ録音</span></button>
+      <button id="clearLoop" aria-label="ループを消す" disabled>消去</button>
+    </div>
+    <div class="loop-track" aria-hidden="true"><div id="loopProgress"></div></div>
+    <div class="footer-note"><span id="loopStatus" role="status">2小節を録って、重ねて弾く。</span><span>A4 = 440 Hz</span></div>
+  </footer>
+</main>
+<dialog id="settings" aria-labelledby="settingsTitle">
+  <div class="sheet-header"><div><small>SHAPE YOUR SOUND</small><h2 id="settingsTitle">音と光を調える</h2></div><button id="settingsClose" aria-label="設定を閉じる">閉じる</button></div>
+  <div class="settings-grid">
+    <label>オクターブ<select id="octave"><option value="-1">−1 / 低く</option value="0" selected>0 / 標準</option><option value="1">＋1 / 高く</option></select></label>
+    <label>花火の色<select id="palette"><option value="neon">Neon / 極彩</option><option value="aurora">Aurora / 青緑</option><option value="ember">Ember / 金紅</option></select></label>
+    <label>余韻 <output id="decayValue">55</output><input id="decay" type="range" min="0" max="100" value="55"></label>
+    <label>光の強さ <output id="glowValue">70</output><input id="glow" type="range" min="0" max="100" value="70"></label>
+    <label>ECHO <output id="echoValue">25</output><input id="echo" type="range" min="0" max="80" value="25"></label>
+    <label>HALL <output id="hallValue">35</output><input id="hall" type="range" min="0" max="80" value="35"></label>
+    <label>音量 <output id="volumeValue">65</output><input id="volume" type="range" min="0" max="100" value="65"></label>
+    <label>グルーヴ<select id="swing"><option value="0">Straight</option><option value="0.16">Swing / 軽く跳ねる</option><option value="0.3">Swing / 深く跳ねる</option></select></label>
+  </div>
+  <div class="switches"><label><input id="metronome" type="checkbox"> メトロノーム</label><label><input id="showNotes" type="checkbox" checked> 弦の音名を表示</label><label><input id="calm" type="checkbox"> 光の動きを控える</label></div>
+  <div class="guide"><p><strong>線を弾く。</strong> 各線に一つの音。外側ほど明るい音になり、速くなぞるほど強く響きます。中心に指を戻すと、音を鳴らさずに移動できます。</p><p><strong>両手で紡ぐ。</strong> 「和音」は左手で3音、右手でメロディー。「波紋」は押さえた線からテンポに沿って音が巡ります。</p><p><strong>フレーズを残す。</strong> 録音を押して、最初の一音から2小節。自動で繰り返します。再び押すと一時停止。キー・スケールを変えるとループも一緒に移調します。</p><p>PC: A〜Jの7キーが低音、Q〜Uの7キーが高音。Spaceでループ操作、Escで全停止。スマホでは両手の親指で。</p></div>
+</dialog>
+<script type="module" src="app.mjs"></script>
+</body>
+</html>

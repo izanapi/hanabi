@@ -1,4 +1,5 @@
 import { frequency, clamp } from './music.mjs';
+import { VOICES, pluckedWave } from './voices.mjs';
 
 // A diffuse, decorrelated stereo tail with early reflections and a 5.2 s RT60.
 export function hallImpulse(ac) {
@@ -25,6 +26,7 @@ export class InstrumentAudio {
   constructor() {
     this.context = null;
     this.voices = [];
+    this.pluckCache = new Map();
     this.settings = { volume: 65, echo: 30, hall: 45, decay: 55, bpm: 92, muted: false };
     this.onInterrupted = () => {};
   }
@@ -79,6 +81,9 @@ export class InstrumentAudio {
     this.noise = ac.createBuffer(1, Math.floor(ac.sampleRate * .025), ac.sampleRate);
     const data = this.noise.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / data.length * 8);
+    this.air = ac.createBuffer(1, Math.floor(ac.sampleRate * .5), ac.sampleRate);
+    const breath = this.air.getChannelData(0);
+    for (let i = 0; i < breath.length; i++) breath[i] = Math.random() * 2 - 1;
     ac.onstatechange = () => {
       if (this.context === ac && ac.state === 'interrupted') this.onInterrupted();
     };
@@ -109,41 +114,85 @@ export class InstrumentAudio {
     const ac = this.context;
     if (!ac || ac.state === 'closed') return;
     const t = Math.max(when, ac.currentTime), f = frequency(midi);
-    const duration = .45 + this.settings.decay / 100 * 2.8;
+    if (!Object.hasOwn(VOICES, voice)) voice = 'kalimba';
+    const profile = VOICES[voice];
+    brightness = clamp(brightness, 0, 1);
+    const duration = (.45 + this.settings.decay / 100 * 2.8) * profile.length;
+    const attack = Math.min(profile.attack, duration * .3);
     const env = ac.createGain(), filter = ac.createBiquadFilter(), stereo = ac.createStereoPanner();
     filter.type = 'lowpass'; filter.frequency.value = 950 + brightness * 10000;
     stereo.pan.value = clamp(pan, -.8, .8);
     env.connect(filter); filter.connect(stereo); stereo.connect(this.input);
-    const amp = .18 * clamp(velocity, .15, 1);
+    const amp = profile.gain * clamp(velocity, .15, 1);
     env.gain.setValueAtTime(.0001, t);
-    env.gain.exponentialRampToValueAtTime(amp, t + .004);
+    env.gain.linearRampToValueAtTime(amp, t + attack);
     env.gain.exponentialRampToValueAtTime(.0001, t + duration);
     const nodes = [env, filter, stereo], sources = [];
     const addPartial = (ratio, level, decay = 1, type = 'sine') => {
       const oscillator = ac.createOscillator(), gain = ac.createGain();
       oscillator.type = type; oscillator.frequency.value = f * ratio;
       gain.gain.setValueAtTime(level, t);
-      gain.gain.exponentialRampToValueAtTime(.0001, t + duration * decay);
+      if (voice !== 'bamboo' && voice !== 'orbit') gain.gain.exponentialRampToValueAtTime(.0001, t + duration * decay);
       oscillator.connect(gain); gain.connect(env);
       oscillator.start(t); oscillator.stop(t + duration + .04);
       sources.push(oscillator); nodes.push(oscillator, gain);
       return oscillator;
     };
-    if (voice === 'neon') {
-      const carrier = addPartial(1, .65);
+    const vibrato = (target, rate, depth) => {
+      const lfo = ac.createOscillator(), amount = ac.createGain();
+      lfo.frequency.value = rate; amount.gain.setValueAtTime(0, t);
+      amount.gain.linearRampToValueAtTime(f * depth, t + .3);
+      lfo.connect(amount); amount.connect(target.frequency); lfo.start(t); lfo.stop(t + duration + .04);
+      sources.push(lfo); nodes.push(lfo, amount);
+    };
+    if (voice === 'koto') {
+      // Cache a bounded set of pitched buffers; rapid strums do not allocate forever.
+      const bright = Math.round(brightness * 4) / 4;
+      const key = `${ac.sampleRate}/${midi}/${this.settings.decay}/${bright}`;
+      let buffer = this.pluckCache.get(key);
+      if (!buffer) {
+        const data = pluckedWave(ac.sampleRate, f, duration, bright);
+        buffer = ac.createBuffer(1, data.length, ac.sampleRate); buffer.getChannelData(0).set(data);
+        this.pluckCache.set(key, buffer);
+        if (this.pluckCache.size > 24) this.pluckCache.delete(this.pluckCache.keys().next().value);
+      }
+      const string = ac.createBufferSource(); string.buffer = buffer; string.connect(env);
+      string.start(t); string.stop(t + duration + .04); nodes.push(string); sources.push(string);
+      filter.frequency.value = 2600 + brightness * 8000;
+    } else if (voice === 'bamboo') {
+      const fundamental = addPartial(1, .75); addPartial(2, .08);
+      vibrato(fundamental, 4.8, .0035);
+      const air = ac.createBufferSource(), breathFilter = ac.createBiquadFilter(), amount = ac.createGain();
+      air.buffer = this.air; air.loop = true;
+      breathFilter.type = 'bandpass'; breathFilter.frequency.value = Math.min(f * 3, 7000);
+      amount.gain.value = .08 + brightness * .1;
+      air.connect(breathFilter); breathFilter.connect(amount); amount.connect(env);
+      air.start(t); air.stop(t + duration + .04); sources.push(air); nodes.push(air, breathFilter, amount);
+      filter.frequency.value = 1500 + brightness * 4500;
+    } else if (voice === 'orbit') {
+      addPartial(.997, .22, 1, 'sawtooth'); addPartial(1.003, .22, 1, 'sawtooth'); addPartial(2, .12);
+      filter.frequency.setValueAtTime(350, t);
+      filter.frequency.exponentialRampToValueAtTime(900 + brightness * 4200, t + attack + .3);
+      filter.frequency.exponentialRampToValueAtTime(500, t + duration);
+    } else if (voice === 'chip') {
+      const pulse = addPartial(1, .65, 1, 'square'); addPartial(2, .07, .4, 'square');
+      pulse.frequency.setValueAtTime(f * 2, t); pulse.frequency.setValueAtTime(f, t + .012);
+      filter.frequency.value = 5000 + brightness * 7000;
+    } else if (voice === 'neon') {
+      const carrier = addPartial(1, .7);
       const mod = ac.createOscillator(), index = ac.createGain();
       mod.frequency.value = f * 2;
-      index.gain.setValueAtTime(f * (.35 + brightness * 2), t);
-      index.gain.exponentialRampToValueAtTime(.01, t + duration * .6);
+      index.gain.setValueAtTime(f * (1 + brightness * 6), t);
+      index.gain.exponentialRampToValueAtTime(.01, t + duration * .28);
       mod.connect(index); index.connect(carrier.frequency);
-      mod.start(t); mod.stop(t + duration + .04);
-      sources.push(mod); nodes.push(mod, index);
-      addPartial(2, .12, .35);
+      mod.start(t); mod.stop(t + duration + .04); sources.push(mod); nodes.push(mod, index);
+      filter.frequency.value = 3200 + brightness * 9000;
     } else if (voice === 'glass') {
-      addPartial(1, .65); addPartial(2, .22, .65); addPartial(3, .11, .35); addPartial(6, .05, .18);
+      addPartial(1, .68); addPartial(2.756, .15, .8); addPartial(5.404, .065, .6); addPartial(8.933, .025, .3);
+      filter.frequency.value = 6500 + brightness * 6500;
     } else if (voice === 'velvet') {
-      addPartial(1, .62); addPartial(2, .14, .35); addPartial(3, .08, .25);
-      filter.frequency.value = 700 + brightness * 2700;
+      addPartial(1, .55, 1, 'triangle'); addPartial(2.01, .16, .2); addPartial(3, .04, .15);
+      filter.frequency.value = 650 + brightness * 1900;
     } else {
       addPartial(1, .68); addPartial(2, .18, .38); addPartial(3, .09, .18); addPartial(5.04, .035, .09);
       const noise = ac.createBufferSource(), level = ac.createGain();
@@ -177,7 +226,7 @@ export class InstrumentAudio {
   }
   dispose() {
     const context = this.context;
-    this.context = null; this.analyser = null; this.spectrum = null;
+    this.context = null; this.analyser = null; this.spectrum = null; this.pluckCache.clear();
     for (const voice of this.voices) voice.clean();
     this.voices = [];
     if (context && context.state !== 'closed') context.close().catch(() => {});

@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import * as music from '../music.mjs';
+import { VOICES } from '../voices.mjs';
 import { InstrumentAudio, hallImpulse } from '../audio.mjs';
 
 class Param {
   constructor() { this.value = 0; }
   setValueAtTime(value, time) { assert.ok(Number.isFinite(value) && time >= 0); this.value = value; }
+  linearRampToValueAtTime(value, time) { assert.ok(Number.isFinite(value) && time >= 0); this.value = value; this.attackTime = time; }
   exponentialRampToValueAtTime(value, time) { assert.ok(value > 0 && Number.isFinite(value) && time >= 0); this.value = value; }
   setTargetAtTime(value, time, constant) { assert.ok(Number.isFinite(value) && time >= 0 && constant > 0); this.value = value; }
   cancelScheduledValues() {}
@@ -40,7 +42,7 @@ class Element {
   constructor(id = '') { this.id = id; this.listeners = {}; this.style = {}; this.dataset = {}; this.value = ''; this.classList = { toggle() {}, add() {}, remove() {} }; }
   addEventListener(type, callback) { (this.listeners[type] ??= []).push(callback); }
   dispatch(type, data = {}) { const event = { target: this, preventDefault() {}, ...data }; for (const callback of this.listeners[type] || []) callback(event); }
-  append() {} setAttribute() {} setPointerCapture() {}
+  append(child) { (this.children ??= []).push(child); } setAttribute() {} setPointerCapture() {}
   getBoundingClientRect() { return { left: 0, top: 0, width: 390, height: 420 }; }
   showModal() { this.open = true; } close() { this.open = false; }
 }
@@ -55,7 +57,7 @@ function harness() {
   document.createElement = () => new Element(); document.querySelectorAll = () => modes;
   let now = 1000, frame;
   const globalEvents = new Element();
-  const sandbox = { ...music, InstrumentAudio: TracedAudio, document, console, performance: { now: () => now },
+  const sandbox = { ...music, VOICES, InstrumentAudio: TracedAudio, document, console, performance: { now: () => now },
     devicePixelRatio: 2, matchMedia: () => ({ matches: false }), ResizeObserver: class { observe() {} },
     setInterval: () => 1, clearInterval() {}, requestAnimationFrame: callback => { frame = callback; },
     addEventListener: (...args) => globalEvents.addEventListener(...args) };
@@ -104,7 +106,7 @@ test('two-bar loop records, repeats, transposes, pauses, resumes and clears', as
   h.advance(5.3); assert.equal(h.loop.state, 'playing'); assert.ok(h.audio.calls.length > 2);
   h.elements.get('root').value = '2'; h.elements.get('root').dispatch('change');
   const count = h.audio.calls.length; h.advance(5.4);
-  assert.ok(h.audio.calls.slice(count).some(call => call.midi === music.midiForString(2, 2, 'hirajoshi')));
+  assert.ok(h.audio.calls.slice(count).some(call => call.midi === music.midiForString(2, 2, 'insen')));
   h.elements.get('loop').dispatch('click'); assert.equal(h.loop.state, 'paused'); const stopped = h.audio.calls.length;
   h.advance(2); assert.equal(h.audio.calls.length, stopped);
   h.elements.get('loop').dispatch('click'); h.advance(.5); assert.equal(h.loop.state, 'playing');
@@ -120,7 +122,7 @@ test('backgrounding cancels recording, clears fingers, stops audio and can unloc
 });
 test('every timbre has valid envelopes and heavy strumming stays within 32 active voices', async () => {
   const audio = new InstrumentAudio(); await audio.unlock();
-  for (const voice of ['kalimba', 'glass', 'neon', 'velvet']) for (let i = 0; i < 40; i++) {
+  for (const voice of Object.keys(VOICES)) for (let i = 0; i < 40; i++) {
     audio.play(48 + i, { voice, when: audio.time, velocity: .8 }); assert.ok(audio.voices.length <= 32);
   }
   audio.context.advance(8); assert.equal(audio.voices.length, 0);
@@ -136,8 +138,8 @@ test('look-ahead scheduling does not cut off the final fraction of the recording
   h.audio.context.currentTime = end + .01; h.schedule(); assert.equal(h.loop.state, 'playing'); h.pause();
 });
 
-test('Hirajoshi is the actual initial tuning and UI selection', () => {
-  const h = harness(); assert.equal(h.config.scale, 'hirajoshi'); assert.equal(h.elements.get('scale').value, 'hirajoshi');
+test('Insen is the actual initial tuning and UI selection', () => {
+  const h = harness(); assert.equal(h.config.scale, 'insen'); assert.equal(h.elements.get('scale').value, 'insen');
 });
 test('curling inward adds fifth then octave without retriggering the base note', async () => {
   const h = harness(); h.config.calm = true;
@@ -155,7 +157,7 @@ test('inner harmonics are separately recorded and preserve intervals after trans
   assert.deepEqual(Array.from(h.loop.events, event => event.interval), [0,7,12]);
   h.elements.get('root').value = '3'; h.elements.get('root').dispatch('change');
   const count = h.audio.calls.length; h.advance(5.5);
-  const notes = h.audio.calls.slice(count).map(call => call.midi), base = music.midiForString(4, 3, 'hirajoshi');
+  const notes = h.audio.calls.slice(count).map(call => call.midi), base = music.midiForString(4, 3, 'insen');
   for (const offset of [0,7,12]) assert.ok(notes.includes(base + offset));
   h.pause();
 });
@@ -163,7 +165,7 @@ test('dice updates all corresponding controls and preserves recorded loop and mi
   const h = harness(); h.elements.get('loop').dispatch('click'); await h.flush(); h.pointer('pointerdown', 1, 2);
   const events = JSON.stringify(h.loop.events), bpm = h.config.bpm, volume = h.audio.settings.volume;
   h.elements.get('randomize').dispatch('click');
-  assert.notEqual(h.config.scale, 'hirajoshi'); assert.notEqual(h.config.root, 0);
+  assert.notEqual(h.config.scale, 'insen'); assert.notEqual(h.config.root, 0);
   for (const key of ['root','scale','voice','palette']) assert.equal(h.elements.get(key).value, String(h.config[key]));
   assert.equal(h.config.bpm, bpm); assert.equal(h.audio.settings.volume, volume); assert.equal(JSON.stringify(h.loop.events), events);
   for (const id of ['echo','hall','volume']) { h.elements.get(id).value = '42'; h.elements.get(id).dispatch('input'); assert.equal(h.audio.settings[id], 42); }
@@ -221,4 +223,26 @@ test('space effects use cross-feedback below unity, matched beat delays and a st
   assert.ok(energy(left.slice(3000,4000)) > 1e-6, 'audible long tail');
   assert.ok(energy(left.slice(4500)) < energy(left.slice(1000,2000))*.01, 'tail decays');
   audio.dispose(); assert.equal(audio.readSpectrum(),null);
+});
+
+test('voice picker uses the complete synthesis catalog', () => {
+  const h = harness();
+  assert.deepEqual(h.elements.get('voice').children.map(option=>option.value), Object.keys(VOICES));
+});
+test('new voices use different source families and the plucked-string cache stays bounded', async () => {
+  const audio = new InstrumentAudio(); await audio.unlock();
+  audio.context.sampleRate = 44100;
+  const graphs = {};
+  for (const voice of ['koto','bamboo','orbit','chip']) {
+    const before = audio.context.nodes.length; audio.play(60,{voice});
+    graphs[voice] = audio.context.nodes.slice(before);
+  }
+  assert.ok(graphs.koto.some(node=>node.buffer && !node.loop));
+  assert.ok(graphs.bamboo.some(node=>node.loop));
+  assert.ok(graphs.orbit.some(node=>node.type==='sawtooth'));
+  assert.ok(graphs.chip.some(node=>node.type==='square'));
+  for (let midi=48;midi<78;midi++) audio.play(midi,{voice:'koto'});
+  assert.ok(audio.pluckCache.size <= 24);
+  const size=audio.pluckCache.size;audio.play(77,{voice:'koto'});assert.equal(audio.pluckCache.size,size);
+  audio.dispose();assert.equal(audio.pluckCache.size,0);
 });

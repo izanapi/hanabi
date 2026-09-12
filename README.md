@@ -4,7 +4,7 @@ A two-handed light instrument. Swipe 28 tuned strings, curl into the inner spect
 
 ## Play
 
-- The default tuning is **C Hirajoshi**, with the Kalimba voice and **Aurora** colors.
+- The default tuning is **C Insen**, with the Kalimba voice and **Aurora** colors.
 - Each colored string has a fixed note in the selected scale. Each side rises in pitch from bottom to top; the right side is one octave above the left.
 - Swipe across strings to pluck them. Faster swipes play louder; the outer edge sounds brighter.
 - Curl inward into the **white strings** to add a perfect fifth (+7 semitones). Move deeper to add an octave (+12) as well. Two stable rings mark the fifth and octave boundaries. A segmented radial spectrum responds to the actual audio and sends straight sparks outward like the core of a firework.
@@ -35,7 +35,20 @@ The settings panel contains octave, color, decay, glow, swing, metronome, note l
 
 The pentatonic names describe equal-tempered note sets, not complete traditional tuning or performance systems. Interval spellings were checked against the [Tonal scale dictionary](https://github.com/tonaljs/tonal/blob/main/packages/scale-type/data.ts); the Ryukyu note set matches its ionian-pentatonic entry.
 
-Four synthesized voices: **Kalimba**, **Glass**, **Neon FM** and **Velvet**. Three color palettes: **Neon**, **Aurora** and **Ember**.
+Eight synthesized voices use different source types and articulation:
+
+| Voice | Character |
+| --- | --- |
+| Kalimba | Fast wooden attack and a soft pitched body |
+| Koto | Fractional-delay plucked string with a bright, naturally darkening tail |
+| Bamboo | Breath noise, gentle onset and delayed vibrato |
+| Glass | Metallic, inharmonic bell partials with a longer ring |
+| Neon FM | A strong FM attack that rapidly softens |
+| Velvet | Filtered triangle body with a short electric-piano-like tine |
+| Orbit | Slowly opening, detuned sawtooth pad |
+| Chip | Short square-wave notes with an octave attack |
+
+These are synthesized interpretations, not recordings of acoustic instruments. The voice picker and dice share the same catalog. Koto buffers are cached with a 24-entry limit; all voices share the existing 32-voice ceiling. Three color palettes: **Neon**, **Aurora** and **Ember**.
 
 ## Space effects
 
@@ -83,6 +96,7 @@ Audio starts on the first playing gesture. Hiding or leaving the page, or an aud
 
 - `music.mjs`: scales, tuning, hit testing, swipe interpolation, inner geometry, random patches and loop quantization.
 - `audio.mjs`: Web Audio synthesis and effects, capped at 32 active voices.
+- `voices.mjs`: voice catalog and fractional-delay plucked-string synthesis.
 - `app.mjs`: multi-touch, audio-clock scheduling, loops and Canvas rendering.
 - `index.html` / `style.css`: performance surface and settings.
 

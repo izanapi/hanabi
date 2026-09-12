@@ -1,9 +1,10 @@
 import { NOTES, SCALES, PER_HAND, STRING_COUNT, LOOP_STEPS, clamp, midiForString, noteName, angleForString, stringAt, crossedStrings, chordStrings, stepSeconds, loopStep, bpmFromTaps, innerRadius, harmonicLayer, harmonicOffsets, randomPatch, accompanimentPhrase, recordingClick, frequency } from './music.mjs';
 import { InstrumentAudio } from './audio.mjs';
+import { VOICES } from './voices.mjs';
 
 const $ = id => document.getElementById(id);
 const canvas = $('canvas'), ctx = canvas.getContext('2d'), audio = new InstrumentAudio();
-const config = { root: 0, scale: 'hirajoshi', voice: 'kalimba', octave: 0, mode: 'pluck', palette: 'aurora', bpm: 92, swing: 0, glow: 70, showNotes: true, calm: false, metronome: false };
+const config = { root: 0, scale: 'insen', voice: 'kalimba', octave: 0, mode: 'pluck', palette: 'aurora', bpm: 92, swing: 0, glow: 70, showNotes: true, calm: false, metronome: false };
 const fingers = new Map(), pressedKeys = new Set(), pulses = [], particles = [], visualQueue = [];
 const strings = Array.from({ length: STRING_COUNT }, (_, id) => ({ id, angle: angleForString(id), energy: 0, innerEnergy: 0, last: -10 }));
 const clock = { timer: null, step: 0, next: 0 };
@@ -19,6 +20,8 @@ const selectOptions = (element, options) => {
 };
 selectOptions($('root'), NOTES.map((name, i) => [i, name]));
 selectOptions($('scale'), Object.entries(SCALES).map(([key, scale]) => [key, scale.name]));
+selectOptions($('voice'), Object.entries(VOICES).map(([key, voice]) => [key, voice.name]));
+$('voice').value = config.voice;
 $('scale').value = config.scale;
 $('palette').value = config.palette;
 

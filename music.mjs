@@ -1,3 +1,4 @@
+import { VOICES } from './voices.mjs';
 // Pure musical rules shared by the instrument and its regression tests.
 export const NOTES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
 export const SCALES = {
@@ -92,7 +93,7 @@ export function randomPatch(current, random = Math.random) {
   return {
     root: different(Array.from({length: 12}, (_, i) => i), current.root),
     scale: different(Object.keys(SCALES), current.scale),
-    voice: different(['kalimba', 'glass', 'neon', 'velvet'], current.voice),
+    voice: different(Object.keys(VOICES), current.voice),
     palette: different(['neon', 'aurora', 'ember'], current.palette),
   };
 }
